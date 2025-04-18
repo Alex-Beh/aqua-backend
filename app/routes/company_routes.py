@@ -41,19 +41,16 @@ def get_company(company_id):
 def create_company():
     data = request.get_json()
 
-    if not data.get('companyName') or not data.get('companyCode') or not data.get('createdBy'):
-        return jsonify({'error': 'Missing required fields'}), 400
-
-    if Company.query.filter_by(company_code=data.get('companyCode').upper()).first():
-        return jsonify({'error': 'Company code already exists'}), 400
-
+    errors = Company.validate_fields(data)
+    if errors:
+        return jsonify({'errors': errors}), 400
+    
     new_company = Company(
         company_name=data.get('companyName'),
         company_code=data.get('companyCode').upper(),
         hotline=data.get('hotline'),
         email=data.get('email'),
         address=data.get('address'),
-        created_by=data.get('createdBy'),
         created_at=datetime.utcnow()
     )
     db.session.add(new_company)
@@ -66,14 +63,14 @@ def update_company(company_id):
     company = Company.query.get_or_404(company_id)
     data = request.get_json()
 
-    if not data.get('companyName') or not data.get('createdBy'):
-        return jsonify({'error': 'Missing required fields'}), 400
+    errors = Company.validate_fields(data, for_update=True)
+    if errors:
+        return jsonify({'errors': errors}), 400
 
     company.company_name = data.get('companyName', company.company_name)
     company.hotline = data.get('hotline', company.hotline)
     company.email = data.get('email', company.email)
     company.address = data.get('address', company.address)
-    company.updated_by = data.get('updatedBy')
     company.updated_at = datetime.utcnow()
     db.session.commit()
     return jsonify(company.to_dict())
@@ -82,9 +79,10 @@ def update_company(company_id):
 @bp.route('<int:company_id>', methods=['DELETE'])
 def delete_company(company_id):
     company = Company.query.get_or_404(company_id)
-    company.deleted_by = request.args.get('deletedBy', type=int)
-    company.deleted_at = datetime.utcnow()
+
+    company.soft_delete()
     db.session.commit()
+    
     return jsonify({'message': 'Company deleted successfully'}), 200
 
 # Get all sites for a company

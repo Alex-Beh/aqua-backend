@@ -30,13 +30,13 @@ bp = Blueprint('fish_types', __name__, url_prefix='/api/fish-types')
 # API Routes
 @bp.route('', methods=['GET'])
 def get_fish_types():
-    fish_types = FishType.query.filter_by(is_active=True).all()
+    fish_types = FishType.query.filter(FishType.deleted_at.is_(None)).all()
     return jsonify([fish_type.to_dict() for fish_type in fish_types])
 
 @bp.route('<int:type_id>', methods=['GET'])
 def get_fish_type(type_id):
     fish_type = FishType.query.get_or_404(type_id)
-    if not fish_type.is_active:
+    if fish_type.deleted_at:
         return jsonify({'error': 'Fish type not found'}), 404
     return jsonify(fish_type.to_dict())
 
@@ -45,9 +45,10 @@ def create_fish_type():
     # Get form data
     data = request.form
     
-    # Check if type_code exists
-    if FishType.query.filter_by(type_code=data.get('typeCode')).first():
-        return jsonify({'error': 'Type code already exists'}), 400
+    # Validate using model method
+    errors = FishType.validate_fields(data)
+    if errors:
+        return jsonify({'errors': errors}), 400
     
     # Handle image upload
     image_url = None
@@ -79,6 +80,11 @@ def update_fish_type(type_id):
     fish_type = FishType.query.get_or_404(type_id)
     data = request.form
     
+    # Validate only updatable fields
+    errors = FishType.validate_fields(data, for_update=True)
+    if errors:
+        return jsonify({'errors': errors}), 400
+        
     # Handle image upload
     if 'image' in request.files:
         file = request.files['image']
@@ -91,8 +97,8 @@ def update_fish_type(type_id):
             fish_type.image_url = f"/uploads/fish_images/{filename}"
     
     # Update fields if provided
-    if 'typeCode' in data:
-        fish_type.type_code = data.get('typeCode').upper()
+    # if 'typeCode' in data:
+    #     fish_type.type_code = data.get('typeCode').upper()
     if 'commonName' in data:
         fish_type.common_name = data.get('commonName')
     if 'scientificName' in data:
@@ -105,11 +111,12 @@ def update_fish_type(type_id):
 
 @bp.route('<int:type_id>', methods=['DELETE'])
 def delete_fish_type(type_id):
+    # if not current_user.is_admin:  # Add your auth check
+    #     return jsonify({'error': 'Unauthorized'}), 403
+    
     fish_type = FishType.query.get_or_404(type_id)
     
-    # Soft delete - just mark as inactive
-    fish_type.is_active = False
-    fish_type.updated_at = datetime.utcnow()
+    fish_type.soft_delete()
     db.session.commit()
     
     return jsonify({'message': 'Fish type deleted successfully'}), 200

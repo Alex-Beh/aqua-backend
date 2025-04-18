@@ -13,11 +13,11 @@ class Site(db.Model):
     hotline = db.Column(db.String(50))
     site_manager_id = db.Column(db.Integer)
     site_contact_id = db.Column(db.Integer)
-    created_by = db.Column(db.Integer, nullable=False)
+    #created_by = db.Column(db.Integer, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_by = db.Column(db.Integer)
-    updated_at = db.Column(db.DateTime)
-    deleted_by = db.Column(db.Integer)
+    #updated_by = db.Column(db.Integer)
+    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    #deleted_by = db.Column(db.Integer)
     deleted_at = db.Column(db.DateTime)
 
     def to_dict(self):
@@ -30,10 +30,10 @@ class Site(db.Model):
             'hotline': self.hotline,
             'siteManagerId': self.site_manager_id,
             'siteContactId': self.site_contact_id,
-            'createdBy': self.created_by,
+            #'createdBy': self.created_by,
             'createdAt': self.created_at.isoformat() if self.created_at else None,
-            'updatedBy': self.updated_by,
+            #'updatedBy': self.updated_by,
             'updatedAt': self.updated_at.isoformat() if self.updated_at else None,
-            'deletedBy': self.deleted_by,
+            #'deletedBy': self.deleted_by,
             'deletedAt': self.deleted_at.isoformat() if self.deleted_at else None,
         }
