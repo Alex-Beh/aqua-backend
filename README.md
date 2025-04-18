@@ -20,12 +20,25 @@ pip install Flask Flask-Cors Flask-SQLAlchemy psycopg2-binary
     psql
     
     # Inside psql:
-    CREATE DATABASE aquastock;
+    -- Create user
     CREATE USER username WITH PASSWORD 'password';
-    ALTER ROLE username SET client_encoding TO 'utf8';
-    ALTER ROLE username SET default_transaction_isolation TO 'read committed';
-    ALTER ROLE username SET timezone TO 'UTC';
-    GRANT ALL PRIVILEGES ON DATABASE aquastock TO username;
+
+    -- Create database
+    CREATE DATABASE aquastock OWNER username;
+
+    -- Connect to the database
+    \c aquastock
+
+    -- Grant schema privileges
+    GRANT USAGE, CREATE ON SCHEMA public TO username;
+
+    -- Grant access to all tables/sequences (just in case)
+    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO username;
+    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO username;
+
+    -- Set default privileges so future tables/sequences are included
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO username;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO username;
     \q
     
     # Exit back to your regular user
@@ -38,7 +51,46 @@ pip install Flask Flask-Cors Flask-SQLAlchemy psycopg2-binary
     ```
     The server will start at:📍 http://localhost:5000/
 
+## Flask-Migrate
+🧠 In simpler terms:
+It helps you track changes to your database models and apply those changes to the actual PostgreSQL/MySQL/SQLite database — safely and incrementally.
+
+- ✅ First-Time Setup
+    Initializes the migrations folder and sets up the database schema:
+    ```
+    ./init_db.sh
+    ```
+- 🔄 When You Add or Modify a Model
+    Generate a new migration and apply it:
+    ```
+    python -m flask db migrate -m "Add Tank model"
+    python -m flask db upgrade
+    ```
+- 🧪 Verify Current Database Schema
+    Prints all tables and their columns to confirm everything is applied correctly:
+    ```
+    ./print_db_schema.sh
+    ```
+
 ## Testing with Postman
 Use Postman to test each endpoint with form-data (especially for image uploads). Collection [Aqua Stock Take Backend.postman_collection.json](./config/Aqua%20Stock%20Take%20Backend.postman_collection.json) had been provided.
 
 <img src="./doc/post-api-fish-types.png" style="zoom: 50%;" />
+
+## Useful Commands
+1. Reset the db from psql
+    ```
+    -- Drop the database if it exists
+    DROP DATABASE IF EXISTS aquastock;
+
+    REVOKE ALL PRIVILEGES ON SCHEMA public FROM username;
+    REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM username;
+    REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM username;
+
+    -- Drop default privileges granted by postgres TO username
+    ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON TABLES FROM username;
+    ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON SEQUENCES FROM username;
+
+    DROP USER IF EXISTS username;
+    ```
+2. 
