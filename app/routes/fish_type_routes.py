@@ -4,6 +4,7 @@ from app import db
 from datetime import datetime
 from werkzeug.utils import secure_filename
 import os
+from app.utils import api_response, validate_json, paginate_response
 
 # Helper function for file upload
 def allowed_file(filename):
@@ -28,17 +29,46 @@ def serve_fish_image(filename):
 bp = Blueprint('fish_types', __name__, url_prefix='/api/fish-types')
 
 # API Routes
+# Get a paginated list of fish types (optionally filtered by status)
+@bp.route('/paging', methods=['GET'])
+def get_fish_types_paged():
+    page = request.args.get('page', 1, type=int)
+    size = request.args.get('size', 10, type=int)
+    status = request.args.get('status')  # active or inactive
+
+    query = FishType.query.filter(FishType.deleted_at.is_(None))
+
+    # Apply status filter if present
+    if status == 'active':
+        query = query.filter(FishType.is_active.is_(True))
+    elif status == 'inactive':
+        query = query.filter(FishType.is_active.is_(False))
+
+    # Use paginate_response function to handle pagination
+    paginated_data = paginate_response(query, page, size, FishType)
+
+    return api_response("Fish types retrieved successfully", data=paginated_data)
+
+# Get all fish types
 @bp.route('', methods=['GET'])
 def get_fish_types():
-    fish_types = FishType.query.filter(FishType.deleted_at.is_(None)).all()
-    return jsonify([fish_type.to_dict() for fish_type in fish_types])
+    status = request.args.get('status')  # active or inactive
+
+    query = FishType.query.filter(FishType.deleted_at.is_(None))
+    if status == 'active':
+        query = query.filter(FishType.is_active.is_(True))
+    elif status == 'inactive':
+        query = query.filter(FishType.is_active.is_(False))
+
+    items = query.all()
+    return api_response("Fish types retrieved successfully", data=[f.to_dict() for f in items])
 
 @bp.route('<int:type_id>', methods=['GET'])
 def get_fish_type(type_id):
     fish_type = FishType.query.get_or_404(type_id)
-    if fish_type.deleted_at:
-        return jsonify({'error': 'Fish type not found'}), 404
-    return jsonify(fish_type.to_dict())
+    if not fish_type or fish_type.deleted_at:
+        return api_response("Fish type not found", status_code=404)
+    return api_response("Fish type retrieved successfully", data=fish_type.to_dict())
 
 @bp.route('', methods=['POST'])
 def create_fish_type():
@@ -46,9 +76,9 @@ def create_fish_type():
     data = request.form
     
     # Validate using model method
-    errors = FishType.validate_fields(data)
-    if errors:
-        return jsonify({'errors': errors}), 400
+    validation_errors = FishType.validate_fields(data)
+    if validation_errors:
+        return api_response("One or more validation errors occurred", errors=validation_errors, status_code=400)
     
     # Handle image upload
     image_url = None
@@ -73,7 +103,7 @@ def create_fish_type():
     db.session.add(new_fish_type)
     db.session.commit()
     
-    return jsonify(new_fish_type.to_dict()), 201
+    return api_response("Fish type created successfully", data=new_fish_type.to_dict(), status_code=201)
 
 @bp.route('<int:type_id>', methods=['PUT'])
 def update_fish_type(type_id):
@@ -81,9 +111,9 @@ def update_fish_type(type_id):
     data = request.form
     
     # Validate only updatable fields
-    errors = FishType.validate_fields(data, for_update=True)
-    if errors:
-        return jsonify({'errors': errors}), 400
+    validation_errors = FishType.validate_fields(data, for_update=True)
+    if validation_errors:
+        return api_response("One or more validation errors occurred", errors=validation_errors, status_code=400)
         
     # Handle image upload
     if 'image' in request.files:
@@ -107,7 +137,7 @@ def update_fish_type(type_id):
     fish_type.updated_at = datetime.utcnow()
     db.session.commit()
     
-    return jsonify(fish_type.to_dict())
+    return api_response("Fish type updated successfully", data=fish_type.to_dict())
 
 @bp.route('<int:type_id>', methods=['DELETE'])
 def delete_fish_type(type_id):
@@ -115,8 +145,10 @@ def delete_fish_type(type_id):
     #     return jsonify({'error': 'Unauthorized'}), 403
     
     fish_type = FishType.query.get_or_404(type_id)
+    if not fish_type or fish_type.deleted_at:
+        return api_response("Fish type not found", status_code=404)
     
     fish_type.soft_delete()
     db.session.commit()
     
-    return jsonify({'message': 'Fish type deleted successfully'}), 200
+    return api_response("Fish type deleted successfully")
