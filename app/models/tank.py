@@ -1,6 +1,8 @@
 from app import db
 from datetime import datetime
 
+from app.models.site import Site
+
 class Tank(db.Model):
     __tablename__ = 'tanks'
 
@@ -20,8 +22,53 @@ class Tank(db.Model):
             'tankId': self.tank_id,
             'siteId': self.site_id,
             'tankName': self.tank_name,
+            'tankCode': self.tank_code,
+            'capacity': self.capacity,
             'createdAt': self.created_at.isoformat() if self.created_at else None,
             'updatedAt': self.updated_at.isoformat() if self.updated_at else None,
             'deletedAt': self.deleted_at.isoformat() if self.deleted_at else None,
             'isActive': self.is_active
         }
+    
+    # Soft delete logic
+    def soft_delete(self, user_id=None):
+        """Marks the record as deleted"""
+        self.deleted_at = datetime.utcnow()
+        self.updated_at = datetime.utcnow()
+        #self.deleted_by = user_id  # If tracking who deleted
+        db.session.add(self)
+        return self
+    
+    @classmethod
+    def validate_fields(cls, data, for_update=False):
+        errors = {}
+
+        if not data.get('tankName'):
+            errors['tankName'] = "Tank Name is required"
+
+        if not data.get('siteId'):
+            errors['siteId'] = "Site ID is required"
+
+        site = Site.query.filter_by(site_id=data.get('siteId'), deleted_at=None).first()
+        if not site:
+            errors['siteId'] = "Invalid or deleted Site ID"
+
+        return errors if errors else None
+
+    @classmethod
+    def generate_auto_code(cls, site_id):
+        site = Site.query.get(site_id)
+        
+        if not site:
+            raise ValueError("Invalid site ID provided.")
+        
+        site_code = site.site_code.upper() if site.site_code else 'UNKNOWN'
+
+        # Ensure that no duplicate tank codes exist for this site
+        existing_count = cls.query.filter_by(site_id=site_id).count()
+        
+        if existing_count > 999:
+            raise ValueError("Maximum tank limit reached for this site.")
+        
+        next_number = existing_count + 1
+        return f"T-{site_code}-{str(next_number).zfill(3)}"

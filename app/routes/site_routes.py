@@ -5,29 +5,34 @@ from datetime import datetime
 
 bp = Blueprint('site', __name__, url_prefix='/api/sites')
 
+# Get all sites (optionally filtered by company_id)
+@bp.route('', methods=['GET'])
+def get_all_sites():
+    company_id = request.args.get('companyId', type=int)
+
+    query = Site.query.filter(Site.deleted_at.is_(None))
+
+    if company_id:
+        query = query.filter_by(company_id=company_id)
+
+    sites = query.order_by(Site.site_name.asc()).all()
+    return jsonify([site.to_dict() for site in sites])
+
 # Get a single site
 @bp.route('<int:site_id>', methods=['GET'])
 def get_site(site_id):
     site = Site.query.get_or_404(site_id)
-    if site.deleted_at:
-        return jsonify({'error': 'Site not found'}), 404
     return jsonify(site.to_dict())
 
 # Create a new site
-@bp.route('/api/sites', methods=['POST'])
+@bp.route('', methods=['POST'])
 def create_site():
     data = request.get_json()
 
-    if not data.get('companyId') or not data.get('siteName') or not data.get('siteCode') or not data.get('createdBy'):
-        return jsonify({'error': 'Missing required fields'}), 400
-
-    # Validate company existence
-    company = Company.query.filter_by(company_id=data.get('companyId'), deleted_at=None).first()
-    if not company:
-        return jsonify({'error': 'Invalid or deleted company ID'}), 400
-
-    if Site.query.filter_by(site_code=data.get('siteCode').upper()).first():
-        return jsonify({'error': 'Site code already exists'}), 400
+    # Validate using model method
+    validation_errors  = Site.validate_fields(data)
+    if validation_errors :
+        return jsonify({'errors': validation_errors }), 400
 
     new_site = Site(
         company_id=data.get('companyId'),
@@ -37,7 +42,7 @@ def create_site():
         hotline=data.get('hotline'),
         site_manager_id=data.get('siteManagerId'),
         site_contact_id=data.get('siteContactId'),
-        created_by=data.get('createdBy'),
+        # created_by=data.get('createdBy'),
         created_at=datetime.utcnow()
     )
 
@@ -51,20 +56,16 @@ def update_site(site_id):
     site = Site.query.get_or_404(site_id)
     data = request.get_json()
 
-    # If company_id is provided, validate it first
-    new_company_id = data.get('companyId')
-    if new_company_id and new_company_id != site.company_id:
-        company = Company.query.filter_by(company_id=new_company_id, deleted_at=None).first()
-        if not company:
-            return jsonify({'error': 'Invalid or deleted company ID'}), 400
-        site.company_id = new_company_id
+    # Perform validation (for update case)
+    validation_errors = Site.validate_fields(data, for_update=True)
+    if validation_errors:
+        return jsonify({'errors': validation_errors}), 400
 
     site.site_name = data.get('siteName', site.site_name)
     site.location = data.get('location', site.location)
     site.hotline = data.get('hotline', site.hotline)
     site.site_manager_id = data.get('siteManagerId', site.site_manager_id)
     site.site_contact_id = data.get('siteContactId', site.site_contact_id)
-    site.updated_by = data.get('updatedBy')
     site.updated_at = datetime.utcnow()
 
     db.session.commit()
@@ -74,7 +75,7 @@ def update_site(site_id):
 @bp.route('<int:site_id>', methods=['DELETE'])
 def delete_site(site_id):
     site = Site.query.get_or_404(site_id)
-    site.deleted_by = request.args.get('deletedBy', type=int)
-    site.deleted_at = datetime.utcnow()
+
+    site.soft_delete()
     db.session.commit()
     return jsonify({'message': 'Site deleted successfully'}), 200
