@@ -24,7 +24,6 @@ def _serialize(tank: Tank) -> dict:
 # ---------------------------------------------------------------------------
 tanks_bp = Blueprint("tanks_bp", __name__, url_prefix="/api/tanks")
 
-
 # Get a paginated list of tanks (optionally filtered by status and siteId)
 @tanks_bp.route('/paging', methods=['GET'])
 def get_tanks_paged():
@@ -109,7 +108,7 @@ def create_tank():
         is_active=is_active,
         created_at=datetime.utcnow()
     )
-    db.session.add(tank)
+    db.session.add(new_tank)
     db.session.commit()
     return api_response("Tank created successfully", data=new_tank.to_dict(), status_code=201)
 
@@ -126,8 +125,7 @@ def update_tank(tank_id):
 
     data = request.get_json()
 
-    is_active = data.get('isActive', str(tank.is_active)).lower(
-    ) == 'true'  # Default to current value if not provided
+    is_active = data.get('isActive', str(tank.is_active)).lower() == 'true'  # Default to current value if not provided
 
     tank.tank_name = data.get('tankName', tank.tank_name)
     tank.capacity = data.get('capacity', tank.capacity)

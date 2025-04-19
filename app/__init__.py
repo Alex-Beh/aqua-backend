@@ -24,9 +24,8 @@ def create_app():
     app.register_blueprint(fish_type_routes.static_bs)
     app.register_blueprint(tank_routes.tanks_bp)
 
-    from app.routes import adjustments_routes, tank_stock_routes, species_routes
+    from app.routes import adjustments_routes, tank_stock_routes
     app.register_blueprint(adjustments_routes.adjust_bp)
     app.register_blueprint(tank_stock_routes.stock_bp)
-    app.register_blueprint(species_routes.species_bp)
 
     return app

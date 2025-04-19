@@ -15,6 +15,9 @@ class FishType(db.Model):
     deleted_at = db.Column(db.DateTime)
     is_active = db.Column(db.Boolean, default=True)
     
+    # Relationships
+    stocks = db.relationship("TankStock", back_populates="fish_type", cascade="all, delete-orphan")
+
     def to_dict(self):
         return {
             'typeId': self.type_id,

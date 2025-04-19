@@ -4,7 +4,7 @@ from datetime import datetime
 from app.models.site import Site
 
 class Tank(db.Model):
-    """Physical tank that can contain multiple fish species."""
+    """Physical tank that can contain multiple fish types."""
     __tablename__ = 'tanks'
 
     tank_id = db.Column(db.Integer, primary_key=True)

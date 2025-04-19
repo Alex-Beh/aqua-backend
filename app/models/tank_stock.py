@@ -2,56 +2,55 @@ from datetime import datetime
 from sqlalchemy import event
 from app import db
 from app.models import StockAdjustment
+from sqlalchemy import text
 
 
 class TankStock(db.Model):
-    """Current inventory quantity for a (tank, species) pair."""
+    """Current inventory quantity for a (tank, fish_type_id) pair."""
 
-    __tablename__ = "tank_species"
+    __tablename__ = "tank_inventory"
     __table_args__ = (
-        db.PrimaryKeyConstraint("tank_id", "species_id"),
+        db.PrimaryKeyConstraint("tank_id", "fish_type_id"),
     )
 
-    tank_id = db.Column(db.Integer, db.ForeignKey(
-        "tanks.tank_id"), nullable=False)
-    species_id = db.Column(db.Integer, db.ForeignKey(
-        "species.species_id"), nullable=False)
+    tank_id = db.Column(db.Integer, db.ForeignKey("tanks.tank_id"), nullable=False)
+    fish_type_id = db.Column(db.Integer, db.ForeignKey("fish_types.type_id"), nullable=False)
     quantity = db.Column(db.Integer, nullable=False, default=0)
+    last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Relationships
     tank = db.relationship("Tank", back_populates="stocks")
-    species = db.relationship("Species", back_populates="stocks")
+    fish_type = db.relationship("FishType", back_populates="stocks")
 
     # Helpers -----------------------------------------------------------------
     def to_dict(self):
         return {
             "tankId": self.tank_id,
-            "speciesId": self.species_id,
+            "fishTypeId": self.fish_type_id,
             "quantity": self.quantity,
+            "lastUpdated": self.last_updated.isoformat() if self.last_updated else None,
         }
 
 ############################
 # AUTOMATIC SYNC LOGIC
 ############################
-
-
 @event.listens_for(StockAdjustment, "after_insert")
 def _sync_tank_stock(mapper, connection, target):
-    """Whenever a StockAdjustment row is inserted, ensure TankStock matches
-    ``quantity_after``.
+    """Whenever a StockAdjustment row is inserted, ensure TankStock matches quantity_after."""
+    print(f"DEBUG: Inserting/updating tank inventory for tank_id={target.source_tank_id}, "
+          f"fish_type_id={target.fish_type_id}, quantity_after={target.quantity_after}")
 
-    This runs inside the same DB transaction, so it keeps TankStock and
-    StockAdjustment atomically consistent.
-    """
-    # Build an upsert statement (PostgreSQL ON CONFLICT) to avoid race conditions.
     upsert_sql = (
-        "INSERT INTO tank_stock (tank_id, species_id, quantity) "
-        "VALUES (:tank_id, :species_id, :qty) "
-        "ON CONFLICT (tank_id, species_id) "
-        "DO UPDATE SET quantity = EXCLUDED.quantity;"
+        "INSERT INTO tank_inventory (tank_id, fish_type_id, quantity, last_updated) "
+        "VALUES (:tank_id, :fish_type_id, :qty, CURRENT_TIMESTAMP) "
+        "ON CONFLICT (tank_id, fish_type_id) "
+        "DO UPDATE SET quantity = EXCLUDED.quantity, last_updated = CURRENT_TIMESTAMP;"
     )
+
     connection.execute(
-        upsert_sql,
-        {"tank_id": target.tank_id, "species_id": target.species_id,
-            "qty": target.quantity_after},
+        text(upsert_sql),
+        {
+            "tank_id": target.source_tank_id,
+            "fish_type_id": target.fish_type_id,
+            "qty": target.quantity_after,
+        },
     )
