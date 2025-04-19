@@ -7,7 +7,7 @@ class StockAdjustment(db.Model):
     __tablename__ = "stock_adjustments"
 
     stock_adjustment_id = db.Column(db.Integer, primary_key=True)
-    transaction_type = db.Column(db.String(20), nullable=False)  # 'IN', 'OUT', 'TRANSFER', etc. Mortality, Addition, Transfer
+    transaction_type = db.Column(db.String(20), nullable=False)   # ADDITION, REMOVAL, DEATH, TRANSFER, STOCK_TAKE
     source_tank_id = db.Column(db.Integer, db.ForeignKey("tanks.tank_id"))
     target_tank_id = db.Column(db.Integer, db.ForeignKey("tanks.tank_id"))
     fish_type_id = db.Column(db.Integer, db.ForeignKey("fish_types.type_id"), nullable=False)
@@ -15,10 +15,10 @@ class StockAdjustment(db.Model):
     quantity_before = db.Column(db.Integer, nullable=False)
     quantity_after = db.Column(db.Integer, nullable=False)
 
-    reason = db.Column(db.String(255))  # e.g. REMOVAL, DEATH, ADDITION, TRANSFER, STOCK_TAKE
+    reason = db.Column(db.String(255))   # Optional explanation
     transaction_date = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     reference_doc = db.Column(db.String(100))  # Proof or Receipt Number
-    notes = db.Column(db.Text)
+    notes = db.Column(db.Text)  # Optional explanation
 
     # recorded_by = db.Column(db.Integer, db.ForeignKey("app_users.user_id"), nullable=False)
     # recorded_by_signature = db.Column(db.LargeBinary)
@@ -43,6 +43,15 @@ class StockAdjustment(db.Model):
     def quantity_change(self):
         return self.quantity_after - self.quantity_before
 
+    @property
+    def direction(self):
+        if self.quantity_change > 0:
+            return "IN"
+        elif self.quantity_change < 0:
+            return "OUT"
+        else:
+            return "SAME"
+        
     # Helpers -----------------------------------------------------------------
     def to_dict(self):
         return {
@@ -54,6 +63,7 @@ class StockAdjustment(db.Model):
             "quantityAfter": self.quantity_after,
             "quantityChange": self.quantity_change,  # Include quantity change
             "transactionType": self.transaction_type,
+            "direction": self.direction,
             "reason": self.reason,
             "notes": self.notes,
             "transactionDate": self.transaction_date.isoformat(),

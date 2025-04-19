@@ -61,7 +61,7 @@ def _handle_stock_change(transaction_type: str):
     fish_type_id = data["fishTypeId"]
     quantity_change = int(data["quantity"])
     notes = data.get("notes")
-
+    reason = data.get("reason")
     try:
         if transaction_type == "TRANSFER" and tank_id == target_tank_id:
             return api_response("Source and target tanks cannot be the same", status_code=400)
@@ -78,7 +78,7 @@ def _handle_stock_change(transaction_type: str):
             create_stock_adjustment(
                 transaction_type, tank_id, fish_type_id,
                 quantity_before, source_ts.quantity,
-                notes, target_tank_id
+                reason, notes, target_tank_id
             )
             ts = source_ts
         else:
@@ -87,7 +87,7 @@ def _handle_stock_change(transaction_type: str):
             create_stock_adjustment(
                 transaction_type, tank_id, fish_type_id,
                 quantity_before, ts.quantity,
-                notes
+                reason, notes
             )
 
         db.session.commit()
@@ -113,8 +113,9 @@ def _handle_stock_change(transaction_type: str):
     )
 
 # --------------------- Adjustment Record ---------------------
-def create_stock_adjustment(transaction_type, tank_id, fish_type_id, quantity_before, quantity_after, notes, target_tank_id=None):
+def create_stock_adjustment(transaction_type, tank_id, fish_type_id, quantity_before, quantity_after, reason, notes, target_tank_id=None):
     now = datetime.utcnow()
+    transaction_type_clean = transaction_type.capitalize()
 
     if transaction_type == "TRANSFER":
         if not target_tank_id:
@@ -122,24 +123,24 @@ def create_stock_adjustment(transaction_type, tank_id, fish_type_id, quantity_be
 
         db.session.add_all([
             StockAdjustment(
-                transaction_type="OUT",
+                transaction_type=transaction_type_clean,
                 source_tank_id=tank_id,
                 target_tank_id=target_tank_id,
                 fish_type_id=fish_type_id,
                 quantity_before=quantity_before,
                 quantity_after=quantity_before - (quantity_after or 0),
-                reason=transaction_type,
+                reason=reason,
                 notes=notes,
                 recorded_at=now
             ),
             StockAdjustment(
-                transaction_type="IN",
+                transaction_type=transaction_type_clean,
                 source_tank_id=tank_id,
                 target_tank_id=target_tank_id,
                 fish_type_id=fish_type_id,
                 quantity_before=0,  # Optional: query existing target tank quantity
                 quantity_after=quantity_after,
-                reason=transaction_type,
+                reason=reason,
                 notes=notes,
                 recorded_at=now
             )
@@ -148,12 +149,12 @@ def create_stock_adjustment(transaction_type, tank_id, fish_type_id, quantity_be
     elif transaction_type == "ADDITION":
         db.session.add(
             StockAdjustment(
-                transaction_type="IN",
+                transaction_type=transaction_type_clean,
                 source_tank_id=tank_id,
                 fish_type_id=fish_type_id,
                 quantity_before=quantity_before,
                 quantity_after=quantity_after,
-                reason=transaction_type,
+                reason=reason,
                 notes=notes,
                 recorded_at=now
             )
@@ -164,12 +165,12 @@ def create_stock_adjustment(transaction_type, tank_id, fish_type_id, quantity_be
             raise ValueError(f"Quantity after cannot exceed before for {transaction_type}")
         db.session.add(
             StockAdjustment(
-                transaction_type="OUT",
+                transaction_type=transaction_type_clean,
                 source_tank_id=tank_id,
                 fish_type_id=fish_type_id,
                 quantity_before=quantity_before,
                 quantity_after=quantity_after,
-                reason=transaction_type,
+                reason=reason,
                 notes=notes,
                 recorded_at=now
             )
