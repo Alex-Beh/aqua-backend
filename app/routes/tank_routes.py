@@ -86,7 +86,7 @@ def get_tank(tank_id):
     return api_response("Tank retrieved successfully", data=tank.to_dict())
 
 
-@tanks_bp.route("/", methods=["POST"])
+@tanks_bp.route("", methods=["POST"])
 def create_tank():
     data = request.get_json()
 
@@ -109,7 +109,7 @@ def create_tank():
         is_active=is_active,
         created_at=datetime.utcnow()
     )
-    db.session.add(tank)
+    db.session.add(new_tank)
     db.session.commit()
     return api_response("Tank created successfully", data=new_tank.to_dict(), status_code=201)
 

@@ -10,7 +10,10 @@ class Tank(db.Model):
     tank_id = db.Column(db.Integer, primary_key=True)
     tank_name = db.Column(db.String(100), nullable=False)
     tank_code = db.Column(db.String(20), unique=True, nullable=False)
+
     site_id = db.Column(db.Integer, db.ForeignKey("sites.site_id"), nullable=False)
+    site = db.relationship('Site', backref='tanks')
+
     capacity = db.Column(db.Integer)
     image = db.Column(db.LargeBinary)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -28,6 +31,7 @@ class Tank(db.Model):
     def to_dict(self):
         return {
             'tankId': self.tank_id,
+            "site": self.site.to_dict() if self.site else None,  # 👈 include nested site
             'siteId': self.site_id,
             'tankName': self.tank_name,
             'tankCode': self.tank_code,
