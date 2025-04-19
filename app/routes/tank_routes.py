@@ -85,7 +85,7 @@ def get_tank(tank_id):
     return api_response("Tank retrieved successfully", data=tank.to_dict())
 
 
-@tanks_bp.route("/", methods=["POST"])
+@tanks_bp.route("", methods=["POST"])
 def create_tank():
     data = request.get_json()
 
