@@ -1,10 +1,17 @@
+"""tanks.py
+Blueprint for Tank CRUD operations.
+
+Register in app.py:
+    from tanks import tanks_bp
+    app.register_blueprint(tanks_bp)
+"""
+
 from flask import Blueprint, request, jsonify
-from app import db
-from app.models.tank import Tank
 from datetime import datetime
 from app.utils import api_response, validate_json, paginate_response
 
-bp = Blueprint('tanks', __name__, url_prefix='/api/tanks')
+from app import db
+from app.models import Tank
 
 # Get a paginated list of tanks (optionally filtered by status and siteId)
 @bp.route('/paging', methods=['GET'])
@@ -60,7 +67,8 @@ def get_tank(tank_id):
         return api_response("Tank not found", status_code=404)
     return api_response("Tank retrieved successfully", data=tank.to_dict())
 
-@bp.route('', methods=['POST'])
+
+@tanks_bp.route("/", methods=["POST"])
 def create_tank():
     data = request.get_json()
 
@@ -83,7 +91,7 @@ def create_tank():
         is_active=is_active,
         created_at=datetime.utcnow()
     )
-    db.session.add(new_tank)
+    db.session.add(tank)
     db.session.commit()
     return api_response("Tank created successfully", data=new_tank.to_dict(), status_code=201)
 

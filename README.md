@@ -93,4 +93,26 @@ Use Postman to test each endpoint with form-data (especially for image uploads).
 
     DROP USER IF EXISTS username;
     ```
-2. 
+
+2. Delete entire database
+    ```
+    # Become postgres superuser
+    sudo -i -u postgres
+
+    # Terminate any open connections (replace aquastock if different)
+    psql -c "
+    SELECT pg_terminate_backend(pid)
+    FROM   pg_stat_activity
+    WHERE  datname = 'aquastock';
+    "
+
+    # Drop role & DB, then recreate both
+    psql <<'SQL'
+    DROP DATABASE IF EXISTS aquastock;
+    DROP USER IF EXISTS username;              -- your app role
+    CREATE USER username WITH PASSWORD 'password';
+    CREATE DATABASE aquastock OWNER username;
+    GRANT ALL PRIVILEGES ON DATABASE aquastock TO username;
+    SQL
+    exit          # back to your normal user
+    ```

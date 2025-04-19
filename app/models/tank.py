@@ -4,12 +4,13 @@ from datetime import datetime
 from app.models.site import Site
 
 class Tank(db.Model):
+    """Physical tank that can contain multiple fish species."""
     __tablename__ = 'tanks'
 
-    tank_id = db.Column(db.Integer, primary_key=True) 
-    tank_name = db.Column(db.String(100), nullable=False) # <---  pass from user
+    tank_id = db.Column(db.Integer, primary_key=True)
+    tank_name = db.Column(db.String(100), nullable=False)
     tank_code = db.Column(db.String(20), unique=True, nullable=False)
-    site_id = db.Column(db.Integer, db.ForeignKey('site.site_id'), nullable=False)
+    site_id = db.Column(db.Integer, db.ForeignKey("sites.site_id"), nullable=False)
     capacity = db.Column(db.Integer)
     image = db.Column(db.LargeBinary)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -17,6 +18,13 @@ class Tank(db.Model):
     deleted_at = db.Column(db.DateTime)
     is_active = db.Column(db.Boolean, default=True)
 
+    # Relationships
+    site = db.relationship("Site", back_populates="tanks")
+    stocks = db.relationship(
+        "TankStock", back_populates="tank", cascade="all, delete-orphan"
+    )
+
+    # Helpers -----------------------------------------------------------------
     def to_dict(self):
         return {
             'tankId': self.tank_id,
@@ -27,7 +35,7 @@ class Tank(db.Model):
             'createdAt': self.created_at.isoformat() if self.created_at else None,
             'updatedAt': self.updated_at.isoformat() if self.updated_at else None,
             'deletedAt': self.deleted_at.isoformat() if self.deleted_at else None,
-            'isActive': self.is_active
+            'isActive': self.is_active,
         }
     
     # Soft delete logic

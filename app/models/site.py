@@ -5,22 +5,41 @@ from app.models.company import Company
 
 # Site model
 class Site(db.Model):
-    __tablename__ = 'site'
+    __tablename__ = "sites"
 
     site_id = db.Column(db.Integer, primary_key=True)
-    company_id = db.Column(db.Integer, db.ForeignKey('company.company_id'))
+    # Optional FK to a future `company` table. Keep nullable=True for now so
+    # we don't need that table immediately.
+    company_id = db.Column(db.Integer, nullable=True)
+
     site_name = db.Column(db.String(100), nullable=False)
     site_code = db.Column(db.String(50), unique=True, nullable=False)
     location = db.Column(db.String(200))
     hotline = db.Column(db.String(50))
-    site_manager_id = db.Column(db.Integer)
-    site_contact_id = db.Column(db.Integer)
-    #created_by = db.Column(db.Integer, nullable=False)
+
+    site_manager_id = db.Column(db.Integer)  # FK to user table (optional)
+    site_contact_id = db.Column(db.Integer)  # FK to user table (optional)
+
+    created_by = db.Column(db.Integer)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    #updated_by = db.Column(db.Integer)
+    updated_by = db.Column(db.Integer)
     updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
-    #deleted_by = db.Column(db.Integer)
+    deleted_by = db.Column(db.Integer)
     deleted_at = db.Column(db.DateTime)
+
+    is_active = db.Column(db.Boolean, default=True)
+
+    # Relationships -----------------------------------------------------------
+    tanks = db.relationship(
+        "Tank",
+        back_populates="site",
+        cascade="all, delete-orphan",
+        lazy=True,
+    )
+
+    # -------------------------------------------------------------------------
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"<Site {self.site_code}>"
 
     def to_dict(self):
         return {
