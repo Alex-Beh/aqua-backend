@@ -35,6 +35,8 @@ def get_fish_types_paged():
     page = request.args.get('page', 1, type=int)
     size = request.args.get('size', 10, type=int)
     status = request.args.get('status')  # active or inactive
+    sort_field = request.args.get('sortField', 'type_code')  # Default sorting by type_code
+    sort_order = request.args.get('sortOrder', 'asc')  # Default ascending order
 
     query = FishType.query.filter(FishType.deleted_at.is_(None))
 
@@ -45,7 +47,7 @@ def get_fish_types_paged():
         query = query.filter(FishType.is_active.is_(False))
 
     # Use paginate_response function to handle pagination
-    paginated_data = paginate_response(query, page, size, FishType)
+    paginated_data = paginate_response(query, page, size, FishType, sort_field, sort_order)
 
     return api_response("Fish types retrieved successfully", data=paginated_data)
 
@@ -65,7 +67,7 @@ def get_fish_types():
 
 @bp.route('<int:type_id>', methods=['GET'])
 def get_fish_type(type_id):
-    fish_type = FishType.query.get_or_404(type_id)
+    fish_type = FishType.query.get(type_id)
     if not fish_type or fish_type.deleted_at:
         return api_response("Fish type not found", status_code=404)
     return api_response("Fish type retrieved successfully", data=fish_type.to_dict())
@@ -92,12 +94,16 @@ def create_fish_type():
             file.save(file_path)
             image_url = f"/uploads/fish_images/{filename}"
     
+    is_active = data.get('isActive', 'true').lower() == 'true'
+
     # Create new fish type
     new_fish_type = FishType(
         type_code=data.get('typeCode').upper(),
         common_name=data.get('commonName'),
         scientific_name=data.get('scientificName'),
-        image_url=image_url
+        image_url=image_url,
+        is_active=is_active,
+        created_at=datetime.utcnow()
     )
     
     db.session.add(new_fish_type)
@@ -107,7 +113,7 @@ def create_fish_type():
 
 @bp.route('<int:type_id>', methods=['PUT'])
 def update_fish_type(type_id):
-    fish_type = FishType.query.get_or_404(type_id)
+    fish_type = FishType.query.get(type_id)
     data = request.form
     
     # Validate only updatable fields
@@ -125,7 +131,9 @@ def update_fish_type(type_id):
             file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
             file.save(file_path)
             fish_type.image_url = f"/uploads/fish_images/{filename}"
-    
+
+    is_active = data.get('isActive', str(fish_type.is_active)).lower() == 'true'  # Default to current value if not provided
+
     # Update fields if provided
     # if 'typeCode' in data:
     #     fish_type.type_code = data.get('typeCode').upper()
@@ -133,7 +141,10 @@ def update_fish_type(type_id):
         fish_type.common_name = data.get('commonName')
     if 'scientificName' in data:
         fish_type.scientific_name = data.get('scientificName')
-    
+
+    # Update the is_active field
+    fish_type.is_active = is_active
+
     fish_type.updated_at = datetime.utcnow()
     db.session.commit()
     
@@ -144,7 +155,7 @@ def delete_fish_type(type_id):
     # if not current_user.is_admin:  # Add your auth check
     #     return jsonify({'error': 'Unauthorized'}), 403
     
-    fish_type = FishType.query.get_or_404(type_id)
+    fish_type = FishType.query.get(type_id)
     if not fish_type or fish_type.deleted_at:
         return api_response("Fish type not found", status_code=404)
     

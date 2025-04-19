@@ -51,7 +51,7 @@ def get_sites_paged(company_id):
 # Get a single company
 @bp.route('<int:company_id>', methods=['GET'])
 def get_company(company_id):
-    company = Company.query.get_or_404(company_id)
+    company = Company.query.get(company_id)
     if not company or company.deleted_at:
         return api_response("Company not found", status_code=404)
     return api_response("Company retrieved successfully", data=company.to_dict())
@@ -80,7 +80,7 @@ def create_company():
 # Update a company
 @bp.route('<int:company_id>', methods=['PUT'])
 def update_company(company_id):
-    company = Company.query.get_or_404(company_id)
+    company = Company.query.get(company_id)
     if not company or company.deleted_at:
         return api_response("Company not found", status_code=404)
     
@@ -101,7 +101,7 @@ def update_company(company_id):
 # Delete a company (soft delete)
 @bp.route('<int:company_id>', methods=['DELETE'])
 def delete_company(company_id):
-    company = Company.query.get_or_404(company_id)
+    company = Company.query.get(company_id)
     if not company or company.deleted_at:
         return api_response("Company not found", status_code=404)
     

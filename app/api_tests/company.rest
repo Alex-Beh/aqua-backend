@@ -1,0 +1,66 @@
+### Get all companies
+GET http://localhost:5000/api/companies
+Accept: application/json
+
+###
+
+### Get companies with pagination (page 1, size 5)
+GET http://localhost:5000/api/companies/paging?page=1&size=5
+Accept: application/json
+
+###
+
+### Get companies with pagination and sorting
+GET http://localhost:5000/api/companies/paging?page=1&size=5&sortField=company_name&sortOrder=desc
+Accept: application/json
+
+###
+
+### Create a new company
+POST http://localhost:5000/api/companies
+Content-Type: application/json
+
+{
+  "companyName": "AquaHarvest",
+  "companyCode": "ahv",
+  "hotline": "+60123456789",
+  "email": "info@aquaharvest.com",
+  "address": "123 Ocean Road, JB"
+}
+
+###
+
+### Get single company by ID
+GET http://localhost:5000/api/companies/4
+Accept: application/json
+
+###
+
+### Update a company
+PUT http://localhost:5000/api/companies/1
+Content-Type: application/json
+
+{
+  "companyName": "AquaHarvest Updated",
+  "hotline": "+60129876543",
+  "email": "updated@aquaharvest.com",
+  "address": "Updated address"
+}
+
+###
+
+### Soft delete a company
+DELETE http://localhost:5000/api/companies/1
+Accept: application/json
+
+###
+
+### Get all sites for a company
+GET http://localhost:5000/api/companies/1/sites
+Accept: application/json
+
+###
+
+### Get paginated sites for a company
+GET http://localhost:5000/api/companies/1/sites/paging?page=1&size=5&sortField=site_name&sortOrder=asc
+Accept: application/json

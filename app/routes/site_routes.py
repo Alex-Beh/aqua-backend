@@ -42,7 +42,7 @@ def get_all_sites():
 # Get a single site
 @bp.route('<int:site_id>', methods=['GET'])
 def get_site(site_id):
-    site = Site.query.get_or_404(site_id)
+    site = Site.query.get(site_id)
     # Check if the site exists and isn't marked as deleted
     if not site or site.deleted_at:
         return api_response("Site not found", status_code=404)

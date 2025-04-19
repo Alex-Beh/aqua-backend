@@ -13,6 +13,8 @@ def get_tanks_paged():
     size = request.args.get('size', 10, type=int)
     status_filter = request.args.get('status')
     site_id_filter = request.args.get('siteId', type=int)  # Ensure it's an integer if present
+    sort_field = request.args.get('sortField', 'tank_code')  # Default sorting by tank_code
+    sort_order = request.args.get('sortOrder', 'asc')  # Default ascending order
 
     query = Tank.query.filter(Tank.deleted_at.is_(None))
 
@@ -27,7 +29,7 @@ def get_tanks_paged():
         query = query.filter(Tank.site_id == site_id_filter)
 
     # Use paginate_response function to handle pagination
-    paginated_data = paginate_response(query, page, size, Tank)
+    paginated_data = paginate_response(query, page, size, Tank, sort_field, sort_order)
 
     return api_response("Tanks retrieved successfully", data=paginated_data)
 
@@ -53,7 +55,7 @@ def get_all_tanks():
 
 @bp.route('/<int:tank_id>', methods=['GET'])
 def get_tank(tank_id):
-    tank = Tank.query.get_or_404(tank_id)
+    tank = Tank.query.get(tank_id)
     if not tank or tank.deleted_at:
         return api_response("Tank not found", status_code=404)
     return api_response("Tank retrieved successfully", data=tank.to_dict())
@@ -72,12 +74,13 @@ def create_tank():
     except ValueError as e:
         return api_response(f"Error generating tank code: {str(e)}", status_code=400)
     
+    is_active = data.get('isActive', 'true').lower() == 'true'
     new_tank = Tank(
         site_id=data['siteId'],
         tank_name=data['tankName'],
         tank_code=tank_code.upper(),
         capacity=data.get('capacity'),
-        is_active=data.get('isActive', True),
+        is_active=is_active,
         created_at=datetime.utcnow()
     )
     db.session.add(new_tank)
@@ -86,14 +89,21 @@ def create_tank():
 
 @bp.route('/<int:tank_id>', methods=['PUT'])
 def update_tank(tank_id):
-    tank = Tank.query.get_or_404(tank_id)
+    tank = Tank.query.get(tank_id)
     if not tank or tank.deleted_at:
         return api_response("Tank not found", status_code=404)
         
+    validation_errors = Tank.validate_fields(data, for_update=True)
+    if validation_errors:
+        return api_response("One or more validation errors occurred", errors=validation_errors, status_code=400)
+    
     data = request.get_json()
+
+    is_active = data.get('isActive', str(tank.is_active)).lower() == 'true'  # Default to current value if not provided
+
     tank.tank_name = data.get('tankName', tank.tank_name)
     tank.capacity = data.get('capacity', tank.capacity)
-    tank.is_active = data.get('isActive', tank.is_active)
+    tank.is_active = is_active 
     tank.updated_at = datetime.utcnow()
     db.session.commit()
 
