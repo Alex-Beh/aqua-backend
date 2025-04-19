@@ -35,8 +35,7 @@ def get_tanks_paged():
     site_id_filter = request.args.get('siteId', type=int)
     # Default sorting by tank_code
     sort_field = request.args.get('sortField', 'tank_code')
-    sort_order = request.args.get(
-        'sortOrder', 'asc')  # Default ascending order
+    sort_order = request.args.get('sortOrder', 'asc')  # Default ascending order
 
     query = Tank.query.filter(Tank.deleted_at.is_(None))
 

@@ -46,21 +46,14 @@ class FishType(db.Model):
         errors = {}
         
         # Required fields validation
-        if not for_update and not data.get('typeCode'):
-            errors['typeCode'] = "Type Code is required"
-        
         if not data.get('commonName'):
             errors['commonName'] = "Common Name is required"
-        
-        # Type code specific rules (only when provided or creating)
-        if 'typeCode' in data or not for_update:
-            type_code = data.get('typeCode', '').upper()
-            
-            if not for_update and not type_code:  # Already handled above
-                pass
-            elif len(type_code) < 3:
-                errors['typeCode'] = "Type Code too short (min 3 chars)"
-            elif cls.query.filter(db.func.upper(cls.type_code) == type_code).first():
-                errors['typeCode'] = "Type Code already exists"
-        
+                
         return errors if errors else None
+    
+    @classmethod
+    def generate_type_code(cls):
+        prefix = 'FISH'
+        existing_count = cls.query.count()  # Count all, including soft-deleted
+        next_number = existing_count + 1
+        return f"{prefix}-{str(next_number).zfill(4)}"

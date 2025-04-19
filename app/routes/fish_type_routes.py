@@ -98,7 +98,7 @@ def create_fish_type():
 
     # Create new fish type
     new_fish_type = FishType(
-        type_code=data.get('typeCode').upper(),
+        type_code=FishType.generate_type_code(),
         common_name=data.get('commonName'),
         scientific_name=data.get('scientificName'),
         image_url=image_url,
