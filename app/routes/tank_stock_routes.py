@@ -26,7 +26,7 @@ def list_stock():
         q = q.filter_by(tank_id=tank_id)
     if fish_type_id:
         q = q.filter_by(fish_type_id=fish_type_id)
-    stock_list = [_serialize_stock(ts) for ts in q.all()]
+    stock_list = [ts.to_dict() for ts in q.all()] 
     return api_response("Tank stock retrieved successfully", data=stock_list)
 
 @stock_bp.route("", methods=["POST"])

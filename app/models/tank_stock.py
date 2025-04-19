@@ -28,6 +28,8 @@ class TankStock(db.Model):
             "fishTypeId": self.fish_type_id,
             "quantity": self.quantity,
             "lastUpdated": self.last_updated.isoformat() if self.last_updated else None,
+            "tank": self.tank.to_dict() if self.tank else None,  # Include nested tank details
+            "fishType": self.fish_type.to_dict() if self.fish_type else None,  # Include nested fish_type details
         }
 
 ############################
