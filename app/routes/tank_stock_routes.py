@@ -3,6 +3,7 @@ from app.models import TankStock, StockAdjustment
 from app import db
 from datetime import datetime
 from app.utils import api_response
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 
 stock_bp = Blueprint("stock_bp", __name__, url_prefix="/api/tank-stock")
 
@@ -52,14 +53,13 @@ def record_death():
 def transfer_fish():
     return _handle_stock_change("TRANSFER")
 
-# --------------------- Stock Change Logic ---------------------
+# --------------------- Core Handler ---------------------
 def _handle_stock_change(transaction_type: str):
     data = request.get_json(force=True)
     tank_id = data["tankId"]
     target_tank_id = data.get("targetTankId")
     fish_type_id = data["fishTypeId"]
     quantity_change = int(data["quantity"])
-    reason = data.get("reason")
     notes = data.get("notes")
 
     try:
@@ -69,32 +69,35 @@ def _handle_stock_change(transaction_type: str):
         ts = TankStock.query.get((tank_id, fish_type_id))
         quantity_before = ts.quantity if ts else 0
 
+        # Perform stock operation
         if transaction_type == "TRANSFER":
             source_ts, target_ts = update_tank_stock(
                 tank_id, fish_type_id, quantity_change, transaction_type, target_tank_id
             )
+            db.session.flush()  # Ensure new records have IDs for adjustment logs
             create_stock_adjustment(
                 transaction_type, tank_id, fish_type_id,
                 quantity_before, source_ts.quantity,
-                reason, notes, target_tank_id
+                notes, target_tank_id
             )
             ts = source_ts
         else:
             ts = update_tank_stock(tank_id, fish_type_id, quantity_change, transaction_type)
+            db.session.flush()
             create_stock_adjustment(
                 transaction_type, tank_id, fish_type_id,
                 quantity_before, ts.quantity,
-                reason, notes
+                notes
             )
 
         db.session.commit()
 
-    except ValueError as e:
+    except (ValueError, IntegrityError) as e:
         db.session.rollback()
         return api_response("Stock adjustment failed", errors=str(e), status_code=400)
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.session.rollback()
-        return api_response("Unexpected error occurred", errors=str(e), status_code=500)
+        return api_response("Unexpected DB error", errors=str(e), status_code=500)
 
     messages = {
         "ADDITION": "Fish added to tank",
@@ -106,15 +109,17 @@ def _handle_stock_change(transaction_type: str):
     return api_response(
         messages.get(transaction_type, "Fish stock updated"),
         data={"tankId": ts.tank_id, "fishTypeId": ts.fish_type_id},
-        status_code=201 if ts.quantity == quantity_change else 200
+        status_code=201 if quantity_before == 0 and transaction_type == "ADDITION" else 200
     )
 
 # --------------------- Adjustment Record ---------------------
-def create_stock_adjustment(transaction_type, tank_id, fish_type_id, quantity_before,
-                            quantity_after, reason, notes, target_tank_id=None):
+def create_stock_adjustment(transaction_type, tank_id, fish_type_id, quantity_before, quantity_after, notes, target_tank_id=None):
+    now = datetime.utcnow()
+
     if transaction_type == "TRANSFER":
         if not target_tank_id:
             raise ValueError("Target tank ID is required for TRANSFER")
+
         db.session.add_all([
             StockAdjustment(
                 transaction_type="OUT",
@@ -122,21 +127,24 @@ def create_stock_adjustment(transaction_type, tank_id, fish_type_id, quantity_be
                 target_tank_id=target_tank_id,
                 fish_type_id=fish_type_id,
                 quantity_before=quantity_before,
-                quantity_after=quantity_after,
-                reason=reason,
-                notes=notes
+                quantity_after=quantity_before - (quantity_after or 0),
+                reason=transaction_type,
+                notes=notes,
+                recorded_at=now
             ),
             StockAdjustment(
                 transaction_type="IN",
                 source_tank_id=tank_id,
                 target_tank_id=target_tank_id,
                 fish_type_id=fish_type_id,
-                quantity_before=0,  # Assuming initially empty
+                quantity_before=0,  # Optional: query existing target tank quantity
                 quantity_after=quantity_after,
-                reason=reason,
-                notes=notes
+                reason=transaction_type,
+                notes=notes,
+                recorded_at=now
             )
         ])
+
     elif transaction_type == "ADDITION":
         db.session.add(
             StockAdjustment(
@@ -145,13 +153,15 @@ def create_stock_adjustment(transaction_type, tank_id, fish_type_id, quantity_be
                 fish_type_id=fish_type_id,
                 quantity_before=quantity_before,
                 quantity_after=quantity_after,
-                reason=reason,
-                notes=notes
+                reason=transaction_type,
+                notes=notes,
+                recorded_at=now
             )
         )
+
     elif transaction_type in {"REMOVAL", "DEATH"}:
         if quantity_after > quantity_before:
-            raise ValueError(f"Quantity after cannot be greater than quantity before for {transaction_type}")
+            raise ValueError(f"Quantity after cannot exceed before for {transaction_type}")
         db.session.add(
             StockAdjustment(
                 transaction_type="OUT",
@@ -159,8 +169,9 @@ def create_stock_adjustment(transaction_type, tank_id, fish_type_id, quantity_be
                 fish_type_id=fish_type_id,
                 quantity_before=quantity_before,
                 quantity_after=quantity_after,
-                reason=reason,
-                notes=notes
+                reason=transaction_type,
+                notes=notes,
+                recorded_at=now
             )
         )
     else:
@@ -168,31 +179,37 @@ def create_stock_adjustment(transaction_type, tank_id, fish_type_id, quantity_be
 
 # --------------------- Stock Update ---------------------
 def update_tank_stock(tank_id, fish_type_id, quantity_change, transaction_type, target_tank_id=None):
-    ts = TankStock.query.get((tank_id, fish_type_id))
+    now = datetime.utcnow()
 
+    ts = TankStock.query.get((tank_id, fish_type_id))
     if transaction_type == "ADDITION":
         if ts:
             ts.quantity += quantity_change
+            ts.last_updated = now
         else:
-            ts = TankStock(tank_id=tank_id, fish_type_id=fish_type_id, quantity=quantity_change)
+            ts = TankStock(tank_id=tank_id, fish_type_id=fish_type_id, quantity=quantity_change, last_updated=now)
             db.session.add(ts)
 
     elif transaction_type in {"REMOVAL", "DEATH"}:
         if not ts or ts.quantity < quantity_change:
-            raise ValueError(f"Insufficient quantity in tank {tank_id} to remove {quantity_change}.")
+            raise ValueError(f"Not enough fish in tank {tank_id} to perform {transaction_type.lower()}.")
         ts.quantity -= quantity_change
+        ts.last_updated = now
 
     elif transaction_type == "TRANSFER":
         if not ts or ts.quantity < quantity_change:
-            raise ValueError(f"Insufficient quantity in tank {tank_id} to transfer {quantity_change}.")
+            raise ValueError(f"Not enough fish in tank {tank_id} to transfer.")
         ts.quantity -= quantity_change
+        ts.last_updated = now
 
         target_ts = TankStock.query.get((target_tank_id, fish_type_id))
         if target_ts:
             target_ts.quantity += quantity_change
+            target_ts.last_updated = now
         else:
-            target_ts = TankStock(tank_id=target_tank_id, fish_type_id=fish_type_id, quantity=quantity_change)
+            target_ts = TankStock(tank_id=target_tank_id, fish_type_id=fish_type_id, quantity=quantity_change, last_updated=now)
             db.session.add(target_ts)
+
         return ts, target_ts
 
     return ts

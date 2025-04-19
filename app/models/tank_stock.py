@@ -15,7 +15,7 @@ class TankStock(db.Model):
 
     tank_id = db.Column(db.Integer, db.ForeignKey("tanks.tank_id"), nullable=False)
     fish_type_id = db.Column(db.Integer, db.ForeignKey("fish_types.type_id"), nullable=False)
-    quantity = db.Column(db.Integer, nullable=False, default=0)
+    quantity = db.Column(db.Integer, default=0)
     last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     tank = db.relationship("Tank", back_populates="stocks")
@@ -35,8 +35,8 @@ class TankStock(db.Model):
 ############################
 @event.listens_for(StockAdjustment, "after_insert")
 def _sync_tank_stock(mapper, connection, target):
-    """Whenever a StockAdjustment row is inserted, ensure TankStock matches quantity_after."""
-    print(f"DEBUG: Inserting/updating tank inventory for tank_id={target.source_tank_id}, "
+    """Sync tank inventory after a stock adjustment."""
+    print(f"DEBUG: Syncing tank stock for tank_id={target.source_tank_id}, "
           f"fish_type_id={target.fish_type_id}, quantity_after={target.quantity_after}")
 
     upsert_sql = (

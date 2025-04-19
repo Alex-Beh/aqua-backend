@@ -15,7 +15,7 @@ class StockAdjustment(db.Model):
     quantity_before = db.Column(db.Integer, nullable=False)
     quantity_after = db.Column(db.Integer, nullable=False)
 
-    reason = db.Column(db.String(255))  # e.g. Mortality, Addition, Transfer
+    reason = db.Column(db.String(255))  # e.g. REMOVAL, DEATH, ADDITION, TRANSFER, STOCK_TAKE
     transaction_date = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     reference_doc = db.Column(db.String(100))  # Proof or Receipt Number
     notes = db.Column(db.Text)
