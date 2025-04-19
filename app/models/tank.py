@@ -19,7 +19,7 @@ class Tank(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
     deleted_at = db.Column(db.DateTime)
-    is_active = db.Column(db.Boolean, default=True)
+    status = db.Column(db.String(20), default='Active')
 
     # Relationships
     site = db.relationship("Site", back_populates="tanks")
@@ -39,7 +39,7 @@ class Tank(db.Model):
             'createdAt': self.created_at.isoformat() if self.created_at else None,
             'updatedAt': self.updated_at.isoformat() if self.updated_at else None,
             'deletedAt': self.deleted_at.isoformat() if self.deleted_at else None,
-            'isActive': self.is_active,
+            'status': self.status,
         }
     
     # Soft delete logic
@@ -64,6 +64,12 @@ class Tank(db.Model):
         site = Site.query.filter_by(site_id=data.get('siteId'), deleted_at=None).first()
         if not site:
             errors['siteId'] = "Invalid or deleted Site ID"
+
+        # Status is required for both creation and updating
+        if not data.get('status'):
+            errors['status'] = "Status is required"
+        elif data.get('status') not in ['Active', 'Maintenance', 'Retired']:
+            errors['status'] = "Invalid status value"
 
         return errors if errors else None
 

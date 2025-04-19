@@ -39,10 +39,8 @@ def get_tanks_paged():
     query = Tank.query.filter(Tank.deleted_at.is_(None))
 
     # Apply status filter if present
-    if status_filter == 'active':
-        query = query.filter(Tank.is_active.is_(True))
-    elif status_filter == 'inactive':
-        query = query.filter(Tank.is_active.is_(False))
+    if status_filter:
+        query = query.filter(Tank.status == status_filter.capitalize())
 
     # Apply site_id filter if present
     if site_id_filter:
@@ -64,10 +62,8 @@ def get_all_tanks():
     query = Tank.query.filter(Tank.deleted_at.is_(None))
 
     # Apply status filter if present
-    if status_filter == 'active':
-        query = query.filter(Tank.is_active.is_(True))
-    elif status_filter == 'inactive':
-        query = query.filter(Tank.is_active.is_(False))
+    if status_filter:
+        query = query.filter(Tank.status == status_filter)
 
     # Apply site_id filter if present
     if site_id_filter:
@@ -99,13 +95,13 @@ def create_tank():
     except ValueError as e:
         return api_response(f"Error generating tank code: {str(e)}", status_code=400)
 
-    is_active = data.get('isActive', 'true').lower() == 'true'
+    status = data.get('status', 'Active')
     new_tank = Tank(
         site_id=data['siteId'],
         tank_name=data['tankName'],
         tank_code=tank_code.upper(),
         capacity=data.get('capacity'),
-        is_active=is_active,
+        status=status,
         created_at=datetime.utcnow()
     )
     db.session.add(new_tank)
@@ -119,17 +115,17 @@ def update_tank(tank_id):
     if not tank or tank.deleted_at:
         return api_response("Tank not found", status_code=404)
 
+    data = request.get_json()
+
     validation_errors = Tank.validate_fields(data, for_update=True)
     if validation_errors:
         return api_response("One or more validation errors occurred", errors=validation_errors, status_code=400)
 
-    data = request.get_json()
-
-    is_active = data.get('isActive', str(tank.is_active)).lower() == 'true'  # Default to current value if not provided
+    status = data.get('status', tank.status)
 
     tank.tank_name = data.get('tankName', tank.tank_name)
     tank.capacity = data.get('capacity', tank.capacity)
-    tank.is_active = is_active
+    tank.status = status
     tank.updated_at = datetime.utcnow()
     db.session.commit()
 
