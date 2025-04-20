@@ -20,7 +20,7 @@ def list_adjustments():
 
     q = StockAdjustment.query
     if tank_id:
-        q = q.filter_by(source_tank_id=tank_id)
+        q = q.filter_by(tank_id=tank_id)
     if fish_type_id:
         q = q.filter_by(fish_type_id=fish_type_id)
     if since:

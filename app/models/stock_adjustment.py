@@ -8,8 +8,7 @@ class StockAdjustment(db.Model):
 
     stock_adjustment_id = db.Column(db.Integer, primary_key=True)
     transaction_type = db.Column(db.String(20), nullable=False)   # ADDITION, REMOVAL, DEATH, TRANSFER, STOCK_TAKE
-    source_tank_id = db.Column(db.Integer, db.ForeignKey("tanks.tank_id"))
-    target_tank_id = db.Column(db.Integer, db.ForeignKey("tanks.tank_id"))
+    tank_id = db.Column(db.Integer, db.ForeignKey("tanks.tank_id"))
     fish_type_id = db.Column(db.Integer, db.ForeignKey("fish_types.type_id"), nullable=False)
 
     quantity_before = db.Column(db.Integer, nullable=False)
@@ -56,8 +55,7 @@ class StockAdjustment(db.Model):
     def to_dict(self):
         return {
             "stockAdjustmentId": self.stock_adjustment_id,
-            "sourceTankId": self.source_tank_id,
-            "targetTankId": self.target_tank_id,
+            "tankId": self.tank_id,
             "fishTypeId": self.fish_type_id,
             "quantityBefore": self.quantity_before,
             "quantityAfter": self.quantity_after,

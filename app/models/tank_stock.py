@@ -38,7 +38,7 @@ class TankStock(db.Model):
 @event.listens_for(StockAdjustment, "after_insert")
 def _sync_tank_stock(mapper, connection, target):
     """Sync tank inventory after a stock adjustment."""
-    print(f"DEBUG: Syncing tank stock for tank_id={target.source_tank_id}, "
+    print(f"DEBUG: Syncing tank stock for tank_id={target.tank_id}, "
           f"fish_type_id={target.fish_type_id}, quantity_after={target.quantity_after}")
 
     upsert_sql = (
@@ -51,7 +51,7 @@ def _sync_tank_stock(mapper, connection, target):
     connection.execute(
         text(upsert_sql),
         {
-            "tank_id": target.source_tank_id,
+            "tank_id": target.tank_id,
             "fish_type_id": target.fish_type_id,
             "qty": target.quantity_after,
         },
