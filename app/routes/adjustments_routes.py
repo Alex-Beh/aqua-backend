@@ -4,6 +4,8 @@ from datetime import datetime
 
 from app import db
 from app.models import StockAdjustment
+from app.models.fish_type import FishType
+from app.models.tank import Tank
 from app.models.tank_stock import TankStock
 from app.utils import api_response, validate_json, paginate_response
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
@@ -95,13 +97,34 @@ def _handle_stock_change(transaction_type: str):
         if transaction_type == "TRANSFER" and tank_id == target_tank_id:
             return api_response("Source and target tanks cannot be the same", status_code=400)
 
-        # Step 2: Quantity Validation (before update)
+        # ✅ Block zero quantity
+        if quantity_change == 0:
+            return api_response("Quantity must be greater than 0", status_code=400)
+
+        # Step 2: Check tank existence and status
+        source_tank = Tank.query.filter_by(tank_id=tank_id, deleted_at=None).first()
+        if not source_tank or source_tank.status.lower() != "active":
+            return api_response(f"Source tank {tank_id} is not in use (inactive or deleted).", status_code=400)
+
+        if target_tank_id:
+            target_tank = Tank.query.filter_by(tank_id=target_tank_id, deleted_at=None).first()
+            if not target_tank or target_tank.status.lower() != "active":
+                return api_response(f"Target tank {target_tank_id} is not in use (inactive or deleted).", status_code=400)
+
+        # Step 3: Validate Fish Type
+        fish_type = FishType.query.filter_by(type_id=fish_type_id, deleted_at=None).first()
+        if not fish_type:
+            return api_response(f"Fish Type {fish_type_id} does not exist or is deleted.", status_code=400)
+        if not fish_type.is_active:
+            return api_response(f"Fish Type {fish_type_id} is currently inactive.", status_code=400)
+
+        # Step 4: Quantity Validation (before update)
         if transaction_type in {"REMOVAL", "DEATH", "TRANSFER"}:
             current_qty = get_current_quantity(tank_id, fish_type_id)
             if current_qty < quantity_change:
                 return api_response(f"Not enough fish in tank {tank_id} to perform {transaction_type.lower()}.", status_code=400)
 
-        # Step 3: Perform update
+        # Step 5: Perform update
         if transaction_type == "TRANSFER":
             # Save before/after values for logging
             source_before = get_current_quantity(tank_id, fish_type_id)
