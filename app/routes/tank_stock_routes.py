@@ -8,6 +8,7 @@ from app.utils import api_response, validate_json, paginate_response
 from sqlalchemy.orm import joinedload
 from app.models.tank import Tank
 from app.models.fish_type import FishType
+from sqlalchemy import func
 
 stock_bp = Blueprint("stock_bp", __name__, url_prefix="/api/tank-stock")
 
@@ -154,7 +155,7 @@ def get_total_quantity_per_tank():
 
     return api_response("Total quantities per tank with fish type breakdown retrieved successfully", data=result)
 
-@stock_bp.route("/top-by-quantity", methods=["GET"])
+@stock_bp.route("/dashboard/top-by-quantity", methods=["GET"])
 def get_top_tanks_by_quantity():
     limit = request.args.get("limit", default=5, type=int)
     siteId = request.args.get("siteId", type=int)  # Get siteId from query parameters
@@ -220,7 +221,7 @@ def build_tank_details(tank_id, total_quantity, tank_obj):
     }
 
 # ✅ Get Site Distribution including Total Fish Count, Tank Count, and Fish Type Count
-@stock_bp.route("/site-distribution", methods=["GET"])
+@stock_bp.route("/dashboard/site-distribution", methods=["GET"])
 def get_site_distribution():
     siteId = request.args.get("siteId", type=int)  # Get siteId from query parameters
     
@@ -313,7 +314,7 @@ def fish_inventory():
 
     return api_response("Fish Inventory retrieved successfully", data=result)
 
-@stock_bp.route("/top-by-fish-inventory", methods=["GET"])
+@stock_bp.route("/dashboard/top-by-fish-inventory", methods=["GET"])
 def top_by_fish_inventory():
     site_id = request.args.get("siteId", type=int)
     search_text = request.args.get("searchText", type=str)
@@ -386,3 +387,86 @@ def fish_inventory_paged():
             "items": result
         }
     )
+
+@stock_bp.route("/dashboard/total-fish-count", methods=["GET"])
+def total_fish_count():
+    site_id = request.args.get("siteId", type=int)
+
+    query = db.session.query(db.func.sum(TankStock.quantity))
+
+    if site_id:
+        query = query.join(Tank, Tank.tank_id == TankStock.tank_id).filter(Tank.site_id == site_id)
+
+    current_total = query.scalar() or 0
+
+    # # For "vs last week", assuming you have a timestamp
+    # last_week_start = datetime.utcnow() - timedelta(days=7)
+    # last_week_query = query.filter(TankStock.created_at >= last_week_start)
+    # last_week_total = last_week_query.scalar() or 0
+
+    # percent_change = (
+    #     ((current_total - last_week_total) / last_week_total * 100)
+    #     if last_week_total > 0 else 0
+    # )
+
+    return api_response("Total Fish Count", data={
+        "totalFishCount": current_total,
+        # "percentChange": round(percent_change, 1)
+    })
+
+@stock_bp.route("/dashboard/total-active-tanks", methods=["GET"])
+def active_tanks():
+    site_id = request.args.get("siteId", type=int)
+
+    query = db.session.query(db.func.count(Tank.tank_id)).filter(
+        func.lower(Tank.status) == "active"
+    )
+
+    if site_id:
+        query = query.filter(Tank.site_id == site_id)
+
+    active_count = query.scalar() or 0
+
+    return api_response("Total Active Tanks", data={
+        "totalTankCount": active_count,
+        "label": "Available for fish storage"
+    })
+
+@stock_bp.route("/dashboard/tanks-with-stock", methods=["GET"])
+def tanks_with_stock():
+    site_id = request.args.get("siteId", type=int)
+
+    query = db.session.query(
+        Tank.tank_id,
+        db.func.sum(TankStock.quantity).label("total_quantity"),
+        Tank.capacity
+    ).join(TankStock, Tank.tank_id == TankStock.tank_id)
+
+    if site_id:
+        query = query.filter(Tank.site_id == site_id)
+
+    query = query.filter(TankStock.quantity > 0)
+
+    tank_data = query.group_by(Tank.tank_id, Tank.capacity).all()
+
+    stocked_count = len(tank_data)
+    total_tank_count = db.session.query(Tank).filter(
+        Tank.site_id == site_id if site_id else True
+    ).count()
+
+    total_capacity = sum(tank.capacity or 0 for tank in tank_data)
+    total_quantity = sum(tank.total_quantity or 0 for tank in tank_data)
+
+    utilization = (
+        (stocked_count / total_tank_count * 100) if total_tank_count > 0 else 0
+    )
+
+    capacity_utilization = (
+        (total_quantity / total_capacity * 100) if total_capacity > 0 else 0
+    )
+
+    return api_response("Tanks With Stock", data={
+        "count": stocked_count,
+        "utilizationPercent": round(utilization, 1),
+        "capacityUtilizationPercent": round(capacity_utilization, 1)
+    })
