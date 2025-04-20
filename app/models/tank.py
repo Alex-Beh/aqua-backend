@@ -70,7 +70,7 @@ class Tank(db.Model):
         status = data.get('status')
         if not status:
             errors['status'] = "Status is required"
-        elif status not in ['Active', 'Maintenance', 'Retired']:
+        elif status not in ['active', 'maintenance', 'retired']:
             errors['status'] = "Invalid status value"
 
         return errors if errors else None
