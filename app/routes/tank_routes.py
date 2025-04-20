@@ -8,6 +8,7 @@ Register in app.py:
 
 from flask import Blueprint, request, jsonify
 from datetime import datetime
+from app.models.site import Site
 from app.utils import api_response, validate_json, paginate_response
 
 from app import db
@@ -80,6 +81,12 @@ def get_tank(tank_id):
         return api_response("Tank not found", status_code=404)
     return api_response("Tank retrieved successfully", data=tank.to_dict())
 
+@tanks_bp.route('/<string:tank_code>', methods=['GET'])
+def get_tank_by_code(tank_code):
+    tank = Tank.query.filter_by(tank_code=tank_code.upper(), deleted_at=None).first()
+    if not tank:
+        return api_response("Tank not found", status_code=404)
+    return api_response("Tank retrieved successfully", data=tank.to_dict())
 
 @tanks_bp.route("", methods=["POST"])
 def create_tank():
@@ -107,7 +114,6 @@ def create_tank():
     db.session.add(new_tank)
     db.session.commit()
     return api_response("Tank created successfully", data=new_tank.to_dict(), status_code=201)
-
 
 @tanks_bp.route('/<int:tank_id>', methods=['PUT'])
 def update_tank(tank_id):
@@ -141,3 +147,81 @@ def delete_tank(tank_id):
     tank.soft_delete()
     db.session.commit()
     return api_response("Tank deleted successfully")
+
+@tanks_bp.route('/batch', methods=['POST'])
+def create_tank_batch():
+    data = request.get_json()
+
+    validation_errors = Tank.validate_fields(data, is_batch=True)
+    if validation_errors:
+        return api_response("One or more validation errors occurred", errors=validation_errors, status_code=400)
+
+    try:
+        start_id = int(data.get('startId'))
+        end_id = int(data.get('endId'))
+        count = int(data.get('count', 0))
+        prefix = data.get('prefix', 'Tank')  # Optional prefix
+        site_id = data.get('siteId')
+        status = data.get('status')
+    except (TypeError, ValueError):
+        return api_response("Invalid input fields for batch creation", status_code=400)
+
+    if start_id > end_id:
+        return api_response("Start Id must be less than or equal to End Id", status_code=400)
+
+    created_tanks = []
+
+    # If count is greater than 0, iterate based on count
+    if count > 0:
+        for i in range(count):
+            try:
+                tank_code = Tank.generate_auto_code(site_id)  # Code with unique increment
+                tank_number = str(start_id + i)  # Sequential tank number
+                tank_name = f"{prefix}{tank_number.zfill(3)}"
+            except ValueError as e:
+                break
+
+            # Ensure tank code is unique
+            if Tank.query.filter_by(tank_code=tank_code).first():
+                continue
+
+            tank = Tank(
+                tank_name=tank_name,
+                tank_code=tank_code,
+                site_id=site_id,
+                status=status,
+                created_at=datetime.utcnow()
+            )
+            db.session.add(tank)
+            created_tanks.append(tank)
+        
+    else:
+        # Default behavior, use the running startId to endId range for batch creation
+        for i in range(start_id, end_id + 1):
+            try:
+                tank_code = Tank.generate_auto_code(site_id)  # Code with unique increment
+                tank_number = str(i)  # Use the start_id + index for sequential tank number
+                tank_name = f"{prefix}{tank_number.zfill(3)}"
+            except ValueError as e:
+                break
+
+            # Ensure tank code is unique
+            if Tank.query.filter_by(tank_code=tank_code).first():
+                continue
+
+            tank = Tank(
+                tank_name=tank_name,
+                tank_code=tank_code,
+                site_id=site_id,
+                status=status,
+                created_at=datetime.utcnow()
+            )
+            db.session.add(tank)
+            created_tanks.append(tank)
+
+    db.session.commit()
+
+    return api_response(
+        f"{len(created_tanks)} tanks created successfully",
+        data=[tank.to_dict() for tank in created_tanks]
+    )

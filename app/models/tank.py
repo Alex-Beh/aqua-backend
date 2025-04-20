@@ -52,23 +52,25 @@ class Tank(db.Model):
         return self
     
     @classmethod
-    def validate_fields(cls, data, for_update=False):
+    def validate_fields(cls, data, for_update=False, is_batch=False):
         errors = {}
-
-        if not data.get('tankName'):
-            errors['tankName'] = "Tank Name is required"
 
         if not data.get('siteId'):
             errors['siteId'] = "Site ID is required"
+        else:
+            site = Site.query.filter_by(site_id=data['siteId'], deleted_at=None).first()
+            if not site:
+                errors['siteId'] = "Invalid or deleted Site ID"
 
-        site = Site.query.filter_by(site_id=data.get('siteId'), deleted_at=None).first()
-        if not site:
-            errors['siteId'] = "Invalid or deleted Site ID"
+        if not is_batch:
+            if not data.get('tankName'):
+                errors['tankName'] = "Tank Name is required"
 
-        # Status is required for both creation and updating
-        if not data.get('status'):
+        # Validate status
+        status = data.get('status')
+        if not status:
             errors['status'] = "Status is required"
-        elif data.get('status') not in ['Active', 'Maintenance', 'Retired']:
+        elif status not in ['Active', 'Maintenance', 'Retired']:
             errors['status'] = "Invalid status value"
 
         return errors if errors else None
