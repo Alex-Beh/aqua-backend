@@ -1,7 +1,9 @@
 from flask import Blueprint, request
+from sqlalchemy import or_
 from app.models import TankStock, StockAdjustment
 from app import db
 from datetime import datetime
+from app.models.site import Site
 from app.utils import api_response, validate_json, paginate_response
 from sqlalchemy.orm import joinedload
 from app.models.tank import Tank
@@ -124,53 +126,263 @@ def get_total_quantity(fish_type_id):
     )
 
 # Get total quantity for each tank, including a breakdown by fish type
-@stock_bp.route("/total-quantity-per-tank", methods=["GET"])
+@stock_bp.route("/summary", methods=["GET"])
 def get_total_quantity_per_tank():
-    # Query the total quantity for each tank (sum of quantities of all fish types in the tank)
-    total_quantities = db.session.query(
+    siteId = request.args.get("siteId", type=int)
+
+    # Base query to get total quantities
+    query = db.session.query(
         TankStock.tank_id,
         db.func.sum(TankStock.quantity).label("total_quantity")
-    ).group_by(TankStock.tank_id).join(Tank).all()
+    ).group_by(TankStock.tank_id).join(Tank)
+
+    # Apply site filter if siteId is provided
+    if siteId and siteId > 0:
+        query = query.filter(Tank.site_id == siteId)
+
+    total_quantities = query.all()
 
     tanks = {tank.tank_id: tank for tank in Tank.query.filter(Tank.tank_id.in_([t[0] for t in total_quantities])).all()}
 
-    # Prepare the result
     result = []
     for tank_id, total_quantity in total_quantities:
         tank = tanks.get(tank_id)
         if tank:
-            # Now query each fish type's total quantity in this tank
-            fish_quantities = db.session.query(
-                TankStock.fish_type_id,
-                db.func.sum(TankStock.quantity).label("fish_total_quantity")
-            ).filter(TankStock.tank_id == tank_id) \
-             .group_by(TankStock.fish_type_id) \
-             .join(FishType).all()
+            result.append(build_tank_details(tank_id, total_quantity, tank))
 
-            # Prepare the breakdown of fish types and their quantities
-            fish_details = []
-            for fish_type_id, fish_total_quantity in fish_quantities:
-                fish_type = FishType.query.get(fish_type_id)
-                if fish_type:
-                    fish_details.append({
-                        "fishTypeId": fish_type_id,
-                        "fishTypeName": fish_type.common_name,  # Common name of the fish type
-                        "scientificName": fish_type.scientific_name,  # Scientific name of the fish type
-                        # "imageUrl": fish_type.image_url,  # Image URL for the fish type
-                        "fishTotalQuantity": fish_total_quantity,  # Total quantity of this fish type in the tank
-                        # "status": "Active" if fish_type.is_active else "Inactive",  # Status of the fish type (Active/Inactive)
-                        "createdAt": fish_type.created_at.isoformat() if fish_type.created_at else None,  # Date when the fish type was created
-                        "updatedAt": fish_type.updated_at.isoformat() if fish_type.updated_at else None,  # Date when the fish type was last updated
-                    })
-
-            result.append({
-                "tankId": tank.tank_id,
-                "tankName": tank.tank_name,
-                "totalQuantity": total_quantity,
-                "fishDetails": fish_details  # Include fish type breakdown for each tank
-            })
-
-    # Now, manually sort by tank name
     result.sort(key=lambda x: x['tankName'])
 
-    return api_response("Total quantities per tank with fish type breakdown", data=result)
+    return api_response("Total quantities per tank with fish type breakdown retrieved successfully", data=result)
+
+@stock_bp.route("/top-by-quantity", methods=["GET"])
+def get_top_tanks_by_quantity():
+    limit = request.args.get("limit", default=5, type=int)
+    siteId = request.args.get("siteId", type=int)  # Get siteId from query parameters
+
+    # Base query to get total quantities
+    query = db.session.query(
+        TankStock.tank_id,
+        db.func.sum(TankStock.quantity).label("total_quantity")
+    ).group_by(TankStock.tank_id) \
+     .join(Tank) \
+     .order_by(db.desc("total_quantity"))
+
+    # Apply site filter if site_id is provided
+    if siteId and siteId > 0:
+        query = query.filter(Tank.site_id == siteId)
+
+    total_quantities = query.limit(limit).all()
+
+    tanks = {tank.tank_id: tank for tank in Tank.query.filter(Tank.tank_id.in_([t[0] for t in total_quantities])).all()}
+
+    result = []
+    for tank_id, total_quantity in total_quantities:
+        tank = tanks.get(tank_id)
+        if tank:
+            result.append(build_tank_details(tank_id, total_quantity, tank))
+
+    return api_response("Top tanks by fish inventory", data=result)
+
+def build_tank_details(tank_id, total_quantity, tank_obj):
+    # Query fish breakdown
+    fish_quantities = db.session.query(
+        TankStock.fish_type_id,
+        db.func.sum(TankStock.quantity).label("fish_total_quantity")
+    ).filter(TankStock.tank_id == tank_id) \
+     .group_by(TankStock.fish_type_id) \
+     .join(FishType).all()
+
+    fish_details = []
+    for fish_type_id, fish_total_quantity in fish_quantities:
+        fish_type = FishType.query.get(fish_type_id)
+        if fish_type:
+            fish_details.append({
+                "fishTypeId": fish_type_id,
+                "commonName": fish_type.common_name,
+                "scientificName": fish_type.scientific_name,
+                "fishTotalQuantity": fish_total_quantity,
+                "createdAt": fish_type.created_at.isoformat() if fish_type.created_at else None,
+                "updatedAt": fish_type.updated_at.isoformat() if fish_type.updated_at else None,
+            })
+
+    capacity = max(tank_obj.capacity or 0, 1)
+    filled_percentage = round((total_quantity / capacity) * 100, 2)
+
+    return {
+        "tankId": tank_obj.tank_id,
+        "tankName": tank_obj.tank_name,
+        "status": tank_obj.status,
+        "totalTankCapacity": capacity,
+        "totalFishCount": total_quantity,
+        "tankFilledPercentage": filled_percentage,
+        "fishTypeCount": len(fish_details),
+        "fishDetails": fish_details
+    }
+
+# ✅ Get Site Distribution including Total Fish Count, Tank Count, and Fish Type Count
+@stock_bp.route("/site-distribution", methods=["GET"])
+def get_site_distribution():
+    siteId = request.args.get("siteId", type=int)  # Get siteId from query parameters
+    
+    # Base query to get site information
+    query = db.session.query(
+        Tank.site_id,
+        db.func.count(Tank.tank_id).label("tank_count"),
+        db.func.count(FishType.type_id).label("fish_type_count"),
+        db.func.sum(TankStock.quantity).label("total_fish_count")
+    ).join(TankStock, TankStock.tank_id == Tank.tank_id, isouter=True) \
+     .join(FishType, TankStock.fish_type_id == FishType.type_id, isouter=True) \
+     .group_by(Tank.site_id)
+
+    # Apply site filter if siteId is provided
+    if siteId and siteId > 0:
+        query = query.filter(Tank.site_id == siteId)
+
+    site_distribution = query.all()
+
+    # Get site details
+    sites = {site.site_id: site for site in Site.query.filter(Site.site_id.in_([s[0] for s in site_distribution])).all()}
+
+    result = []
+    for site_id, tank_count, fish_type_count, total_fish_count in site_distribution:
+        site = sites.get(site_id)
+        if site:
+            result.append({
+                "siteId": site_id,
+                "siteName": site.site_name,
+                "tankCount": tank_count,
+                "fishTypeCount": fish_type_count,
+                "totalFishCount": total_fish_count if total_fish_count is not None else 0,  # Default to 0 if no fish
+                "site": site.to_dict()  # Assuming the `Site` model has a `to_dict()` method
+            })
+
+    return api_response("Site Distribution Summary retrieved successfully", data=result)
+
+def build_fish_inventory_query(site_id=None, search_text=None):
+    query = db.session.query(
+        FishType.type_id,
+        FishType.common_name,
+        FishType.type_code,
+        FishType.scientific_name,
+        db.func.count(TankStock.tank_id.distinct()).label("tank_count"),
+        db.func.sum(TankStock.quantity).label("total_stock")
+    ).join(TankStock, TankStock.fish_type_id == FishType.type_id)
+
+    if site_id:
+        query = query.join(Tank, Tank.tank_id == TankStock.tank_id).filter(Tank.site_id == site_id)
+
+    if search_text:
+        search_text = f"%{search_text}%"
+        query = query.filter(
+            or_(
+                FishType.common_name.ilike(search_text),
+                FishType.type_code.ilike(search_text),
+                FishType.scientific_name.ilike(search_text)
+            )
+        )
+
+    query = query.group_by(
+        FishType.type_id,
+        FishType.common_name,
+        FishType.type_code,
+        FishType.scientific_name
+    )
+
+    return query
+
+@stock_bp.route("/fish-inventory", methods=["GET"])
+def fish_inventory():
+    site_id = request.args.get("siteId", type=int)
+    search_text = request.args.get("searchText", type=str)
+
+    query = build_fish_inventory_query(site_id, search_text)
+    query = query.order_by(FishType.common_name)  # Sort by name
+
+    fish_inventory = query.all()
+
+    result = [
+        {
+            "typeId": fish[0],
+            "typeCode": fish[2],
+            "commonName": fish[1],
+            "scientificName": fish[3],
+            "totalTankCount": fish[4],
+            "totalFishCount": fish[5]
+        } for fish in fish_inventory
+    ]
+
+    return api_response("Fish Inventory retrieved successfully", data=result)
+
+@stock_bp.route("/top-by-fish-inventory", methods=["GET"])
+def top_by_fish_inventory():
+    site_id = request.args.get("siteId", type=int)
+    search_text = request.args.get("searchText", type=str)
+    limit = request.args.get("limit", type=int, default=5)
+
+    query = build_fish_inventory_query(site_id, search_text)
+    query = query.order_by(db.desc("total_stock")).limit(limit)
+
+    top_fish = query.all()
+
+    result = [
+        {
+            "typeId": fish[0],
+            "typeCode": fish[2],
+            "commonName": fish[1],
+            "scientificName": fish[3],
+            "totalTankCount": fish[4],
+            "totalFishCount": fish[5]
+        } for fish in top_fish
+    ]
+
+    return api_response("Top Fish Inventory retrieved successfully", data=result)
+
+
+@stock_bp.route("/fish-inventory/paging", methods=["GET"])
+def fish_inventory_paged():
+    page = request.args.get('page', 1, type=int)
+    size = request.args.get('size', 10, type=int)
+    site_id = request.args.get('siteId', type=int)
+    search_text = request.args.get("searchText", type=str)
+    sort_field = request.args.get("sortField", "common_name")
+    sort_order = request.args.get("sortOrder", "asc")
+
+    valid_sort_fields = ["common_name", "type_code", "scientific_name"]
+    if sort_field not in valid_sort_fields:
+        return api_response(f"Invalid sortField: {sort_field}", status=400)
+
+    query = build_fish_inventory_query(site_id, search_text)
+
+    # Sorting
+    sort_mapping = {
+        "common_name": FishType.common_name,
+        "type_code": FishType.type_code,
+        "scientific_name": FishType.scientific_name
+    }
+    sort_column = sort_mapping[sort_field]
+    query = query.order_by(sort_column.desc() if sort_order == "desc" else sort_column)
+
+    # Pagination
+    total_count = query.count()  # More accurate than separate raw count
+    items = query.offset((page - 1) * size).limit(size).all()
+
+    result = [
+        {
+            "typeId": fish[0],
+            "typeCode": fish[2],
+            "commonName": fish[1],
+            "scientificName": fish[3],
+            "totalTankCount": fish[4],
+            "totalFishCount": fish[5]
+        } for fish in items
+    ]
+
+    return api_response(
+        "Fish Inventory retrieved successfully",
+        data={
+            "total": total_count,
+            "page": page,
+            "size": size,
+            "items": result
+        }
+    )
