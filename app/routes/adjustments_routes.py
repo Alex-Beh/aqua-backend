@@ -41,7 +41,9 @@ def list_adjustments():
     if until:
         q = q.filter(StockAdjustment.transaction_date <= until)
 
-    rows = q.order_by(StockAdjustment.transaction_date.desc()).all()
+    # If no date range is provided, set a default limit (e.g., 100 records)
+    rows = q.order_by(StockAdjustment.transaction_date.desc()).limit(100).all() if not since and not until else q.order_by(StockAdjustment.transaction_date.desc()).all()
+    
     return api_response("Stock adjustments retrieved successfully", data=[adj.to_dict() for adj in rows])
 
 @adjust_bp.route("/<int:adjustment_id>", methods=["GET"])

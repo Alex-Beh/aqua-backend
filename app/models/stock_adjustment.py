@@ -37,6 +37,8 @@ class StockAdjustment(db.Model):
     updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
 
     # Relationships (plain ForeignKey; no backref needed but you can add if desired)
+    tank = db.relationship("Tank", lazy="joined")
+    fish_type = db.relationship("FishType", lazy="joined")
 
     @property
     def quantity_change(self):
@@ -56,7 +58,9 @@ class StockAdjustment(db.Model):
         return {
             "stockAdjustmentId": self.stock_adjustment_id,
             "tankId": self.tank_id,
+            "tank": self.tank.to_dict() if self.tank else None,
             "fishTypeId": self.fish_type_id,
+            "fishType": self.fish_type.to_dict() if self.fish_type else None,
             "quantityBefore": self.quantity_before,
             "quantityAfter": self.quantity_after,
             "quantityChange": self.quantity_change,  # Include quantity change
