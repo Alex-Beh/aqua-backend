@@ -74,6 +74,10 @@ def list_stock():
     tank_id = request.args.get("tankId", type=int)
     fish_type_id = request.args.get("fishTypeId", type=int)
 
+    stock_list = get_tank_stock_list(tank_id=tank_id, fish_type_id=fish_type_id)
+    return api_response("Tank stock retrieved successfully", data=stock_list)
+
+def get_tank_stock_list(tank_id=None, fish_type_id=None):
     q = TankStock.query.options(
         joinedload(TankStock.tank), 
         joinedload(TankStock.fish_type)
@@ -86,8 +90,7 @@ def list_stock():
     else:
         q = q.join(Tank).join(FishType).order_by(Tank.tank_name, FishType.common_name)
 
-    stock_list = [ts.to_dict() for ts in q.all()]
-    return api_response("Tank stock retrieved successfully", data=stock_list)
+    return [ts.to_dict() for ts in q.all()]
 
 # ✅ Get a specific tank+fish_type stock record (read-only)
 @stock_bp.route("/<int:tank_id>/<int:fish_type_id>", methods=["GET"])
@@ -269,7 +272,7 @@ def build_fish_inventory_query(site_id=None, search_text=None):
         db.func.sum(TankStock.quantity).label("total_stock")
     ).join(TankStock, TankStock.fish_type_id == FishType.type_id)
 
-    if site_id:
+    if site_id and site_id > 0:
         query = query.join(Tank, Tank.tank_id == TankStock.tank_id).filter(Tank.site_id == site_id)
 
     if search_text:
@@ -394,7 +397,7 @@ def total_fish_count():
 
     query = db.session.query(db.func.sum(TankStock.quantity))
 
-    if site_id:
+    if site_id and site_id > 0:
         query = query.join(Tank, Tank.tank_id == TankStock.tank_id).filter(Tank.site_id == site_id)
 
     current_total = query.scalar() or 0
@@ -422,7 +425,7 @@ def active_tanks():
         func.lower(Tank.status) == "active"
     )
 
-    if site_id:
+    if site_id and site_id > 0:
         query = query.filter(Tank.site_id == site_id)
 
     active_count = query.scalar() or 0
@@ -442,7 +445,7 @@ def tanks_with_stock():
         Tank.capacity
     ).join(TankStock, Tank.tank_id == TankStock.tank_id)
 
-    if site_id:
+    if site_id and site_id > 0:
         query = query.filter(Tank.site_id == site_id)
 
     query = query.filter(TankStock.quantity > 0)

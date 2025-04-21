@@ -4,3 +4,5 @@ from .fish_type import FishType
 from .tank import Tank
 from .stock_adjustment import StockAdjustment
 from .tank_stock import TankStock
+from .stock_take import StockTake
+from .stock_take_item import StockTakeItem

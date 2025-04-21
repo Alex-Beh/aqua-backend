@@ -7,8 +7,12 @@ from app.models import StockAdjustment
 from app.models.fish_type import FishType
 from app.models.tank import Tank
 from app.models.tank_stock import TankStock
+from app.models.stock_take import StockTake
+from app.models.stock_take_item import StockTakeItem
 from app.utils import api_response, validate_json, paginate_response
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
+from sqlalchemy.orm import joinedload
+from app.routes.tank_stock_routes import get_tank_stock_list
 
 # ---------------------------------------------------------------------------
 # Stock‑adjustment endpoints ------------------------------------------------
@@ -322,3 +326,297 @@ def update_tank_stock(tank_id, fish_type_id, quantity_change, transaction_type, 
         ts.last_updated = now
 
     return ts
+
+# --------------------- Stock Take Routes ---------------------
+@adjust_bp.route("/stock-take/create", methods=["POST"])
+def create_stock_take():
+    return _handle_stock_take_creation()
+
+def _handle_stock_take_creation():
+    data = request.get_json(force=True)
+    remarks = data.get("remarks")
+    tank_id = data.get("tankId")
+    fish_items = data.get("fishItems")
+    status = data.get("status", "Pending").capitalize()
+
+    if status not in ['Draft', 'Pending']:
+        return api_response("Invalid status. Allowed values are 'Draft' or 'Pending'", status_code=400)
+
+    if not tank_id:
+        return api_response("Missing required field for Tank Id", status_code=400)
+
+    if not fish_items or not isinstance(fish_items, list):
+        return api_response("Fish Items should be a non-empty list", status_code=400)
+
+    try:
+        tank = Tank.query.get(tank_id)
+        if not tank:
+            return api_response("Tank not found", status_code=404)
+        if tank.status.lower() != 'active':
+            return api_response("Stock take can only be performed on active tanks", status_code=400)
+
+        if StockTake.is_stock_take_in_progress(tank_id):
+            return api_response("A stock take is already in progress for this tank (Draft or Pending status).", status_code=400)
+
+        # Validate fish items
+        valid_ids, id_to_name, expected_qty_map = extract_fish_stock_info(tank_id)
+        errors = validate_fish_items_stock_take(fish_items, valid_ids, id_to_name)
+        if errors:
+            return api_response("There were errors with the fish items.", errors=errors, status_code=400)
+
+        # Create StockTake
+        now = datetime.utcnow()
+        stock_take = StockTake(
+            site_id=tank.site_id,
+            tank_id=tank_id,
+            remarks=remarks,
+            status=status,
+            initiate_at=now,
+            created_at=now,
+        )
+        db.session.add(stock_take)
+        db.session.flush()
+
+        # Create items
+        items = build_stock_take_items(stock_take.stock_take_id, fish_items, expected_qty_map)
+        db.session.add_all(items)
+        db.session.commit()
+
+        return api_response("Stock take created successfully", data={"stockTakeId": stock_take.stock_take_id}, status_code=201)
+
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        return api_response("Unexpected DB error", errors=str(e), status_code=500)
+
+@adjust_bp.route("/stock-take/update/<int:stock_take_id>", methods=["PUT"])
+def update_stock_take(stock_take_id):
+    data = request.get_json(force=True)
+    remarks = data.get("remarks")
+    fish_items = data.get("fishItems")
+    status = data.get("status", "Pending").capitalize()
+
+    if not fish_items or not isinstance(fish_items, list):
+        return api_response("Fish Items should be a non-empty list", status_code=400)
+
+    try:
+        stock_take = StockTake.query.get(stock_take_id)
+        if not stock_take:
+            return api_response("Stock take not found", status_code=404)
+
+        if stock_take.status not in ["Draft", "Pending"]:
+            return api_response(f"Stock take with status '{stock_take.status}' cannot be updated", status_code=400)
+
+        tank = Tank.query.get(stock_take.tank_id)
+        if not tank or tank.status.lower() != "active":
+            return api_response("Cannot update stock take for inactive or missing tank", status_code=400)
+
+        # Re-validate fish items
+        valid_ids, id_to_name, expected_qty_map = extract_fish_stock_info(tank.tank_id)
+        errors = validate_fish_items_stock_take(fish_items, valid_ids, id_to_name)
+        if errors:
+            return api_response("There were errors with the fish items.", errors=errors, status_code=400)
+
+        # Update main existing stock take
+        stock_take.remarks = remarks
+        stock_take.updated_at = datetime.utcnow()
+        stock_take.status = status
+
+        # Delete existing items and re-add
+        StockTakeItem.query.filter_by(stock_take_id=stock_take_id).delete()
+
+        new_items = build_stock_take_items(stock_take_id, fish_items, expected_qty_map)
+        db.session.add_all(new_items)
+
+        db.session.commit()
+        return api_response("Stock take updated successfully")
+
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        return api_response("Unexpected DB error", errors=str(e), status_code=500)
+
+
+def extract_fish_stock_info(tank_id):
+    """
+    Get valid fish_type_ids, name mapping, and expected quantities from tank stock.
+    """
+    fish_stock_list = get_tank_stock_list(tank_id=tank_id)
+    valid_ids = {item["fishTypeId"] for item in fish_stock_list}
+    id_to_name = {item["fishTypeId"]: item["fishType"]["commonName"] for item in fish_stock_list}
+    id_to_expected_qty = {item["fishTypeId"]: item["quantity"] for item in fish_stock_list}
+    return valid_ids, id_to_name, id_to_expected_qty
+
+
+def validate_fish_items_stock_take(fish_items, valid_fish_type_ids, fish_type_id_to_name):
+    errors = {}
+    for item in fish_items:
+        fish_type_id = item.get("fishTypeId")
+        counted_quantity = item.get("countedQuantity")
+        item_errors = []
+
+        if not fish_type_id:
+            item_errors.append("Fish type ID is required.")
+        elif fish_type_id not in valid_fish_type_ids:
+            item_errors.append("This fish type does not exist in this tank’s stock.")
+
+        if counted_quantity is None or counted_quantity < 0:
+            item_errors.append("Counted quantity must be a non-negative integer.")
+
+        if item_errors:
+            label = fish_type_id_to_name.get(fish_type_id, f"Unknown Fish Type ({fish_type_id})")
+            errors[label] = item_errors
+
+    return errors
+
+
+def build_stock_take_items(stock_take_id, fish_items, expected_quantity_map):
+    """
+    Converts raw fish_items into StockTakeItem instances.
+    """
+    return [
+        StockTakeItem(
+            stock_take_id=stock_take_id,
+            fish_type_id=item["fishTypeId"],
+            expected_quantity=expected_quantity_map.get(item["fishTypeId"], 0),
+            counted_quantity=item["countedQuantity"]
+        ) for item in fish_items
+    ]
+
+# Common function for fetching stock take and validating status
+def get_stock_take_and_validate(stock_take_id, valid_statuses, action):
+    stock_take = StockTake.query.get(stock_take_id)
+    if not stock_take:
+        raise ValueError("Stock take not found")
+    
+    if stock_take.status not in valid_statuses:
+        raise ValueError(f"Stock take with status '{stock_take.status}' cannot be {action}")
+
+    return stock_take
+
+# Common logic for updating status
+def update_stock_take_status(stock_take, status, review_comment):
+    stock_take.status = status
+    stock_take.review_comment = review_comment
+    stock_take.finalize_at = datetime.utcnow()
+    db.session.commit()
+
+# Approve endpoint
+@adjust_bp.route("/stock-take/approve/<int:stock_take_id>", methods=["PUT"])
+def approve_stock_take(stock_take_id):
+    data = request.get_json(force=True)
+    review_comment = data.get("reviewComment")
+
+    try:
+        stock_take = get_stock_take_and_validate(stock_take_id, ["Pending"], "approve")
+        update_stock_take_status(stock_take, "Approved", review_comment)
+
+        return api_response("Stock take approved successfully")
+
+    except ValueError as e:
+        return api_response(str(e), status_code=400)  # Handle validation error
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        return api_response("Unexpected DB error", errors=str(e), status_code=500)
+
+# Reject endpoint
+@adjust_bp.route("/stock-take/reject/<int:stock_take_id>", methods=["PUT"])
+def reject_stock_take(stock_take_id):
+    data = request.get_json(force=True)
+    review_comment = data.get("reviewComment")
+
+    try:
+        stock_take = get_stock_take_and_validate(stock_take_id, ["Pending"], "reject")
+        update_stock_take_status(stock_take, "Rejected", review_comment)
+
+        return api_response("Stock take rejected successfully")
+
+    except ValueError as e:
+        return api_response(str(e), status_code=400)  # Handle validation error
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        return api_response("Unexpected DB error", errors=str(e), status_code=500)
+
+# Cancel endpoint
+@adjust_bp.route("/stock-take/cancel/<int:stock_take_id>", methods=["PUT"])
+def cancel_stock_take(stock_take_id):
+    data = request.get_json(force=True)
+    review_comment = data.get("reviewComment")
+
+    try:
+        stock_take = get_stock_take_and_validate(stock_take_id, ["Draft", "Pending"], "cancel")
+        update_stock_take_status(stock_take, "Canceled", review_comment)
+
+        return api_response("Stock take canceled successfully")
+
+    except ValueError as e:
+        return api_response(str(e), status_code=400)  # Handle validation error
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        return api_response("Unexpected DB error", errors=str(e), status_code=500)
+    
+# @adjust_bp.route("/stock-take/<int:stock_take_id>", methods=["GET"])
+# def get_stock_take(stock_take_id):
+#     take = StockTake.query.get(stock_take_id)
+#     if not take or take.deleted_at:
+#         return api_response("Stock take not found", status_code=404)
+
+#     items = StockTakeItem.query.filter_by(stock_take_id=stock_take_id).all()
+#     return api_response("Stock take retrieved", data={
+#         "stockTake": {
+#             "stockTakeId": take.stock_take_id,
+#             "siteId": take.site_id,
+#             "takenAt": take.taken_at.isoformat(),
+#             "remarks": take.remarks,
+#             "reviewComment": take.review_comment
+#         },
+#         "items": [
+#             {
+#                 "tankId": i.tank_id,
+#                 "fishTypeId": i.fish_type_id,
+#                 "expectedQuantity": i.expected_quantity,  # Corrected to 'expected_quantity'
+#                 "countedQuantity": i.counted_quantity,  # Corrected to 'counted_quantity'
+#                 "adjustmentQuantity": i.adjustment_quantity  # Dynamically calculated field
+#             } for i in items
+#         ]
+#     })
+
+# @adjust_bp.route("/stock-take/<int:stock_take_id>/update", methods=["PATCH"])
+# def update_stock_take_items(stock_take_id):
+#     data = request.get_json(force=True)
+#     updates = data.get("items")
+#     review_comment = data.get("reviewComment")
+
+#     if not updates:
+#         return api_response("Missing update items", status_code=400)
+
+#     try:
+#         stock_take = StockTake.query.get(stock_take_id)
+#         if not stock_take or stock_take.deleted_at:
+#             return api_response("Stock take not found", status_code=404)
+
+#         for item in updates:
+#             tank_id = item.get("tankId")
+#             fish_type_id = item.get("fishTypeId")
+#             counted_qty = item.get("countedQuantity")  # Corrected to 'counted_quantity'
+#             if tank_id is None or fish_type_id is None or counted_qty is None:
+#                 continue
+
+#             st_item = StockTakeItem.query.filter_by(
+#                 stock_take_id=stock_take_id,
+#                 tank_id=tank_id,
+#                 fish_type_id=fish_type_id
+#             ).first()
+
+#             if st_item:
+#                 st_item.counted_quantity = counted_qty  # Updating 'counted_quantity'
+#                 st_item.last_updated = datetime.utcnow()
+
+#         if review_comment:
+#             stock_take.review_comment = review_comment
+
+#         db.session.commit()
+
+#     except SQLAlchemyError as e:
+#         db.session.rollback()
+#         return api_response("Update failed", errors=str(e), status_code=500)
+
+#     return api_response("Stock take updated successfully")
