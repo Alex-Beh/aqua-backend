@@ -552,71 +552,18 @@ def cancel_stock_take(stock_take_id):
     except SQLAlchemyError as e:
         db.session.rollback()
         return api_response("Unexpected DB error", errors=str(e), status_code=500)
-    
-# @adjust_bp.route("/stock-take/<int:stock_take_id>", methods=["GET"])
-# def get_stock_take(stock_take_id):
-#     take = StockTake.query.get(stock_take_id)
-#     if not take or take.deleted_at:
-#         return api_response("Stock take not found", status_code=404)
 
-#     items = StockTakeItem.query.filter_by(stock_take_id=stock_take_id).all()
-#     return api_response("Stock take retrieved", data={
-#         "stockTake": {
-#             "stockTakeId": take.stock_take_id,
-#             "siteId": take.site_id,
-#             "takenAt": take.taken_at.isoformat(),
-#             "remarks": take.remarks,
-#             "reviewComment": take.review_comment
-#         },
-#         "items": [
-#             {
-#                 "tankId": i.tank_id,
-#                 "fishTypeId": i.fish_type_id,
-#                 "expectedQuantity": i.expected_quantity,  # Corrected to 'expected_quantity'
-#                 "countedQuantity": i.counted_quantity,  # Corrected to 'counted_quantity'
-#                 "adjustmentQuantity": i.adjustment_quantity  # Dynamically calculated field
-#             } for i in items
-#         ]
-#     })
+@adjust_bp.route("/stock-take/<int:stock_take_id>", methods=["GET"])
+def get_stock_take(stock_take_id):
+    """
+    Retrieve full details of a stock take by ID,
+    including metadata and associated fish type items.
+    """
+    stock_take = StockTake.query.get(stock_take_id)
+    if not stock_take:
+        return api_response("Stock take not found", status_code=404)
 
-# @adjust_bp.route("/stock-take/<int:stock_take_id>/update", methods=["PATCH"])
-# def update_stock_take_items(stock_take_id):
-#     data = request.get_json(force=True)
-#     updates = data.get("items")
-#     review_comment = data.get("reviewComment")
-
-#     if not updates:
-#         return api_response("Missing update items", status_code=400)
-
-#     try:
-#         stock_take = StockTake.query.get(stock_take_id)
-#         if not stock_take or stock_take.deleted_at:
-#             return api_response("Stock take not found", status_code=404)
-
-#         for item in updates:
-#             tank_id = item.get("tankId")
-#             fish_type_id = item.get("fishTypeId")
-#             counted_qty = item.get("countedQuantity")  # Corrected to 'counted_quantity'
-#             if tank_id is None or fish_type_id is None or counted_qty is None:
-#                 continue
-
-#             st_item = StockTakeItem.query.filter_by(
-#                 stock_take_id=stock_take_id,
-#                 tank_id=tank_id,
-#                 fish_type_id=fish_type_id
-#             ).first()
-
-#             if st_item:
-#                 st_item.counted_quantity = counted_qty  # Updating 'counted_quantity'
-#                 st_item.last_updated = datetime.utcnow()
-
-#         if review_comment:
-#             stock_take.review_comment = review_comment
-
-#         db.session.commit()
-
-#     except SQLAlchemyError as e:
-#         db.session.rollback()
-#         return api_response("Update failed", errors=str(e), status_code=500)
-
-#     return api_response("Stock take updated successfully")
+    return api_response("Stock take retrieved", data={
+        "stockTake": stock_take.to_dict(),
+        "items": [item.to_dict() for item in stock_take.items]
+    })
