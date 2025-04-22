@@ -1,6 +1,6 @@
 
 from flask import Blueprint, request, jsonify
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app import db
 from app.models import StockAdjustment
@@ -104,7 +104,7 @@ def _handle_stock_change(transaction_type: str):
             return api_response("Source and target tanks cannot be the same", status_code=400)
 
         # ✅ Block zero quantity
-        if quantity_change == 0:
+        if quantity_change <= 0:
             return api_response("Quantity must be greater than 0", status_code=400)
 
         # Step 2: Check tank existence and status
@@ -245,22 +245,8 @@ def create_stock_adjustment(transaction_type, tank_id, fish_type_id, quantity_be
 
         db.session.add_all(adjustments)
 
-    elif transaction_type == "ADDITION":
-        db.session.add(
-            StockAdjustment(
-                transaction_type=transaction_type_clean,
-                tank_id=tank_id,
-                fish_type_id=fish_type_id,
-                quantity_before=quantity_before,
-                quantity_after=quantity_after,
-                reason=reason,
-                notes=notes,
-                recorded_at=now
-            )
-        )
-
-    elif transaction_type in {"REMOVAL", "DEATH"}:
-        if quantity_after > quantity_before:
+    elif transaction_type in {"ADDITION", "REMOVAL", "DEATH"}:
+        if transaction_type in {"REMOVAL", "DEATH"} and quantity_after > quantity_before:
             raise ValueError(f"Quantity after cannot exceed before for {transaction_type}")
         db.session.add(
             StockAdjustment(
@@ -507,6 +493,11 @@ def approve_stock_take(stock_take_id):
 
     try:
         stock_take = get_stock_take_and_validate(stock_take_id, ["Pending"], "approve")
+
+        # ✅ Apply changes to stock + log adjustments
+        apply_stock_take_to_stock(stock_take, review_comment)
+
+        # ✅ Then update status to 'Approved'
         update_stock_take_status(stock_take, "Approved", review_comment)
 
         return api_response("Stock take approved successfully")
@@ -516,6 +507,55 @@ def approve_stock_take(stock_take_id):
     except SQLAlchemyError as e:
         db.session.rollback()
         return api_response("Unexpected DB error", errors=str(e), status_code=500)
+
+def apply_stock_take_to_stock(stock_take, review_comment):
+    for item in stock_take.items:
+        tank_stock = TankStock.query.filter_by(
+            tank_id=stock_take.tank_id,
+            fish_type_id=item.fish_type_id
+        ).first()
+
+        # Calculate the change
+        new_quantity = item.counted_quantity
+        old_quantity = tank_stock.quantity if tank_stock else 0
+
+        # Skip if no change
+        if new_quantity == old_quantity:
+            continue
+
+        # Format reason and notes with initiate_at
+        now_str = datetime.utcnow().strftime("%b %d, %Y %I:%M %p")
+        init_str = stock_take.initiate_at.strftime("%b %d, %Y %I:%M %p") if stock_take.initiate_at else "Unknown"
+
+        reason = f"Stock take adjustment (initiated on {init_str}, applied on {now_str})"
+        notes = f"Review comment: {review_comment or 'None'}"
+
+        # Create StockAdjustment record
+        stock_adjustment = StockAdjustment(
+            transaction_type="Stock Take",
+            tank_id=stock_take.tank_id,
+            fish_type_id=item.fish_type_id,
+            quantity_before=old_quantity,
+            quantity_after=new_quantity,
+            reason=reason,
+            notes=notes
+        )
+        db.session.add(stock_adjustment)
+        db.session.flush()
+
+        # Link the adjustment to the item
+        item.adjustment_id = stock_adjustment.stock_adjustment_id
+
+        # Update or insert tank stock
+        if tank_stock:
+            tank_stock.quantity = new_quantity
+            tank_stock.last_updated = datetime.utcnow()
+        else:
+            db.session.add(TankStock(
+                tank_id=item.tank_id,
+                fish_type_id=item.fish_type_id,
+                quantity=new_quantity
+            ))
 
 # Reject endpoint
 @adjust_bp.route("/stock-take/reject/<int:stock_take_id>", methods=["PUT"])
@@ -543,9 +583,9 @@ def cancel_stock_take(stock_take_id):
 
     try:
         stock_take = get_stock_take_and_validate(stock_take_id, ["Draft", "Pending"], "cancel")
-        update_stock_take_status(stock_take, "Canceled", review_comment)
+        update_stock_take_status(stock_take, "Cancelled", review_comment)
 
-        return api_response("Stock take canceled successfully")
+        return api_response("Stock take cancelled successfully")
 
     except ValueError as e:
         return api_response(str(e), status_code=400)  # Handle validation error
@@ -567,3 +607,97 @@ def get_stock_take(stock_take_id):
         "stockTake": stock_take.to_dict(),
         "items": [item.to_dict() for item in stock_take.items]
     })
+
+@adjust_bp.route("/stock-take", methods=["GET"])
+def list_stock_takes():
+    """
+    List stock takes with optional filters:
+    - siteId
+    - tankId
+    - status
+    - since (initiateAt >=)
+    - until (initiateAt <=)
+    """
+    site_id = request.args.get("siteId", type=int)
+    tank_id = request.args.get("tankId", type=int)
+    status_param = request.args.get("status")
+    since = request.args.get("since")  # ISO format
+    until = request.args.get("until")
+
+    q = StockTake.query
+
+    if site_id:
+        q = q.filter_by(site_id=site_id)
+    if tank_id:
+        q = q.filter_by(tank_id=tank_id)
+    if status_param:
+        status_list = [s.strip().capitalize() for s in status_param.split(",")]
+        q = q.filter(StockTake.status.in_(status_list))
+    if since:
+        q = q.filter(StockTake.initiate_at >= since)
+    if until:
+        q = q.filter(StockTake.initiate_at <= until)
+
+    # Optional limit for default view
+    rows = q.order_by(StockTake.initiate_at.desc()).limit(100).all() if not since and not until else q.order_by(StockTake.initiate_at.desc()).all()
+
+    return api_response("Stock takes retrieved", data=[r.to_dict() for r in rows])
+
+@adjust_bp.route("/stock-take-count", methods=["GET"])
+def stock_take_counts():
+    """
+    Return counts of stock takes by their status and the total count,
+    with optional filters for tankId, siteId, and month/year.
+    """
+    site_id = request.args.get("siteId", type=int)
+    tank_id = request.args.get("tankId", type=int)
+    month = request.args.get("month", type=int)
+    year = request.args.get("year", type=int)
+    since = request.args.get("since")
+    until = request.args.get("until") 
+
+    try:
+        if since:
+            since = datetime.strptime(since, "%Y-%m-%d")
+        if until:
+            until = datetime.strptime(until, "%Y-%m-%d") + timedelta(days=1) 
+
+        # Start query on StockTake model
+        q = StockTake.query
+
+        # Apply filters
+        if site_id:
+            q = q.filter_by(site_id=site_id)
+        if tank_id:
+            q = q.filter_by(tank_id=tank_id)
+        if month and year:
+            q = q.filter(db.extract('month', StockTake.initiate_at) == month,
+                         db.extract('year', StockTake.initiate_at) == year)
+
+        # Apply date range filter (since and until)
+        if since:
+            q = q.filter(StockTake.initiate_at >= since)
+        if until:
+            q = q.filter(StockTake.initiate_at < until)
+
+        # Count the number of stock takes for each status
+        draft_count = q.filter_by(status="Draft").count()
+        pending_count = q.filter_by(status="Pending").count()
+        approved_count = q.filter_by(status="Approved").count()
+        rejected_count = q.filter_by(status="Rejected").count()
+        canceled_count = q.filter_by(status="Cancelled").count()
+
+        # Total count of stock takes
+        total_count = q.count()
+
+        return api_response("Stock take counts retrieved successfully", data={
+            "draftCount": draft_count,
+            "pendingCount": pending_count,
+            "approvedCount": approved_count,
+            "rejectedCount": rejected_count,
+            "cancelledCount": canceled_count,
+            "totalCount": total_count
+        })
+
+    except SQLAlchemyError as e:
+        return api_response("Unexpected DB error", errors=str(e), status_code=500)

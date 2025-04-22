@@ -103,6 +103,7 @@ def create_tank():
         return api_response(f"Error generating tank code: {str(e)}", status_code=400)
 
     status = data.get('status', 'Active')
+    status = status.capitalize()
     new_tank = Tank(
         site_id=data['siteId'],
         tank_name=data['tankName'],
@@ -128,6 +129,8 @@ def update_tank(tank_id):
         return api_response("One or more validation errors occurred", errors=validation_errors, status_code=400)
 
     status = data.get('status', tank.status)
+    if status:
+        status = status.capitalize()
 
     tank.tank_name = data.get('tankName', tank.tank_name)
     tank.capacity = data.get('capacity', tank.capacity)
