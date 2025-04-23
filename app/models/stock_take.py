@@ -14,7 +14,7 @@ class StockTake(db.Model):
     remarks = db.Column(db.Text)
     review_comment = db.Column(db.Text)
 
-    status = db.Column(db.String(20), default='Draft')
+    status = db.Column(db.String(20), default='Draft')  # Draft, Pending, Approve, Rejected, Cancelled
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)

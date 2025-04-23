@@ -1,9 +1,11 @@
 from flask import Blueprint, request
-from sqlalchemy import or_, cast, String
+from sqlalchemy import or_, cast, String, desc
 from app.models import TankStock, StockAdjustment
 from app import db
 from datetime import datetime
 from app.models.site import Site
+from app.models.stock_take import StockTake
+from app.models.stock_take_item import StockTakeItem
 from app.utils import api_response, validate_json, paginate_response
 from sqlalchemy.orm import joinedload
 from app.models.tank import Tank
@@ -460,13 +462,112 @@ def get_fish_type_count(site_id=None):
     return query.scalar() or 0
 
 @stock_bp.route("/inventory/summary", methods=["GET"])
-def dashboard_summary():
+def inventory_summary():
     site_id = request.args.get("siteId", type=int)
 
     # Use the common method
-    summary_data = get_fish_summary(site_id)
+    summary_data = get_fish_summary(site_id, detailed=False)
 
+    return api_response("Inventory Summary", data=summary_data)
+
+@stock_bp.route("/dashboard/summary", methods=["GET"])
+def dashboard_summary():
+    site_id = request.args.get("siteId", type=int)
+    summary_data = get_fish_summary(site_id, detailed=True)
     return api_response("Dashboard Summary", data=summary_data)
+
+def get_fish_summary(site_id=None, detailed=False):
+    total_fish, tank_with_fish_count = get_fish_stats(site_id)
+    active_tank_count = get_active_tank_count(site_id)
+    fish_type_count = get_fish_type_count(site_id)
+
+    summary = {
+        "totalFishCount": total_fish,
+        "tankWithFishCount": tank_with_fish_count,
+        "activeTankCount": active_tank_count,
+        "fishTypeCount": fish_type_count,
+    }
+
+    if detailed:
+        # Only calculate this if detailed=True
+        query = db.session.query(
+            Tank.tank_id,
+            db.func.sum(TankStock.quantity).label("total_quantity"),
+            Tank.capacity
+        ).join(TankStock, Tank.tank_id == TankStock.tank_id)
+
+        if site_id and site_id > 0:
+            query = query.filter(Tank.site_id == site_id)
+
+        query = query.filter(TankStock.quantity > 0)
+        tank_data = query.group_by(Tank.tank_id, Tank.capacity).all()
+
+        stocked_count = len(tank_data)
+        total_tank_count = db.session.query(Tank).filter(
+            Tank.site_id == site_id if site_id else True
+        ).count()
+
+        total_capacity = sum(tank.capacity or 0 for tank in tank_data)
+        total_quantity = sum(tank.total_quantity or 0 for tank in tank_data)
+
+        utilization = (stocked_count / total_tank_count * 100) if total_tank_count > 0 else 0
+        capacity_utilization = (total_quantity / total_capacity * 100) if total_capacity > 0 else 0
+
+        summary["tanksWithStock"] = {
+            "count": stocked_count,
+            "utilizationPercent": round(utilization, 1),
+            "capacityUtilizationPercent": round(capacity_utilization, 1)
+        }
+
+        # Last Dashboard Summary Card (Stock Take)
+        # Find the latest finalized stock take
+        last_stock_take = db.session.query(StockTake).filter(
+            StockTake.status == "Approved", 
+            StockTake.finalize_at != None,
+            (StockTake.site_id == site_id) if site_id is not None and site_id > 0 else True
+        ).order_by(desc(StockTake.finalize_at)).first()
+
+        if last_stock_take:
+            item_count = db.session.query(StockTakeItem).filter_by(
+                stock_take_id=last_stock_take.stock_take_id
+            ).count()
+
+            # Adding humanized "daysAgo"
+            last_stock_take_date = last_stock_take.finalize_at
+            summary["lastStockTake"] = {
+                "date": last_stock_take_date.isoformat(),
+                "daysAgo": humanize_days_ago(last_stock_take_date),
+                "tankCount": 1,
+                "itemCount": item_count,
+                "status": last_stock_take.status,
+                "remarks": last_stock_take.remarks
+            }
+        else:
+            summary["lastStockTake"] = None
+
+    return summary
+
+
+def humanize_days_ago(dt):
+    delta = (datetime.utcnow() - dt).days
+
+    # Handle special cases
+    if delta == 0:
+        return "Today"
+    elif delta == 1:
+        return "Yesterday"
+    elif delta < 7:
+        return f"{delta} days ago"
+    elif delta < 30:
+        weeks = delta // 7
+        return f"{weeks} week{'s' if weeks > 1 else ''} ago"
+    elif delta < 365:
+        months = delta // 30
+        return f"{months} month{'s' if months > 1 else ''} ago"
+    else:
+        years = delta // 365
+        return f"{years} year{'s' if years > 1 else ''} ago"
+
 
 @stock_bp.route("/dashboard/total-fish-count", methods=["GET"])
 def dashboard_total_fish_count():
@@ -477,17 +578,6 @@ def dashboard_total_fish_count():
 
     return api_response("Total Fish Count", data=summary_data)
 
-def get_fish_summary(site_id=None):
-    total_fish, tank_with_fish_count = get_fish_stats(site_id)
-    active_tank_count = get_active_tank_count(site_id)
-    fish_type_count = get_fish_type_count(site_id)
-
-    return {
-        "totalFishCount": total_fish,                # Total number of fish
-        "tankWithFishCount": tank_with_fish_count,   # Number of tanks with fish
-        "activeTankCount": active_tank_count,        # Active tanks count
-        "fishTypeCount": fish_type_count             # Number of fish types
-    }
 
 @stock_bp.route("/dashboard/total-active-tanks", methods=["GET"])
 def active_tanks():
