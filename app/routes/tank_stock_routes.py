@@ -25,48 +25,60 @@ def _serialize_stock(ts: TankStock) -> dict:
 # ✅ List all tank stock records, with optional filtering by tankId or fishTypeId
 @stock_bp.route("/paging", methods=["GET"])
 def get_list_stock_paged():
-    # Pagination parameters
+    # Pagination
     page = request.args.get('page', 1, type=int)
     size = request.args.get('size', 10, type=int)
 
-    # Filter parameters
+    # Filters
     tank_id = request.args.get("tankId", type=int)
     fish_type_id = request.args.get("fishTypeId", type=int)
+    search_text = request.args.get("searchText", "", type=str).strip()
 
-    # Sorting parameters
+    # Sorting
     sort_field = request.args.get("sortField", "tank_name")
     sort_order = request.args.get("sortOrder", "asc")
 
-    valid_sort_fields = ["tank_name", "common_name"]
+    valid_sort_fields = ["tank_name", "common_name", "quantity", "type_code"]
     if sort_field not in valid_sort_fields:
         return api_response(f"Invalid sortField: {sort_field}", status=400)
 
-    # Base query with eager loading
+    # Base query with joins
     q = TankStock.query.options(
         joinedload(TankStock.tank),
         joinedload(TankStock.fish_type)
-    )
+    ).join(Tank).join(FishType)
 
     # Apply filters
     if tank_id:
-        q = q.filter(TankStock.tank_id == tank_id).join(FishType)
-    elif fish_type_id:
-        q = q.filter(TankStock.fish_type_id == fish_type_id).join(Tank)
-    else:
-        q = q.join(Tank).join(FishType)
+        q = q.filter(TankStock.tank_id == tank_id)
+    if fish_type_id:
+        q = q.filter(TankStock.fish_type_id == fish_type_id)
 
-    # Sorting using explicit mapping
+    # Apply search text filter (case-insensitive match)
+    if search_text:
+        q = q.filter(
+            db.or_(
+                db.func.lower(Tank.tank_name).like(f"%{search_text.lower()}%"),
+                db.func.lower(FishType.common_name).like(f"%{search_text.lower()}%")
+            )
+        )
+
+    # Apply sorting
     sort_mapping = {
         "tank_name": Tank.tank_name,
-        "common_name": FishType.common_name
+        "common_name": FishType.common_name,
+        "quantity": TankStock.quantity,
+        "type_code": FishType.type_code
     }
+
     sort_column = sort_mapping.get(sort_field, Tank.tank_name)
     q = q.order_by(sort_column.desc() if sort_order == "desc" else sort_column)
 
-    # Apply pagination without passing sort field
+    # Paginate results
     paginated_data = paginate_response(q, page, size, sort_order)
 
     return api_response("Tank stock retrieved successfully", data=paginated_data)
+
 
 # ✅ List all tank stock records, with optional filtering by tankId or fishTypeId
 @stock_bp.route("", methods=["GET"])
@@ -391,31 +403,40 @@ def fish_inventory_paged():
         }
     )
 
-@stock_bp.route("/dashboard/total-fish-count", methods=["GET"])
-def total_fish_count():
+@stock_bp.route("/total-fish-count", methods=["GET"])
+def inventory_total_fish_count():
     site_id = request.args.get("siteId", type=int)
+    total_fish, tank_count = get_fish_stats(site_id)
 
+    return api_response("Total Fish Count", data={
+        "totalFishCount": total_fish,
+        "tankCount": tank_count
+    })
+
+@stock_bp.route("/dashboard/total-fish-count", methods=["GET"])
+def dashboard_total_fish_count():
+    site_id = request.args.get("siteId", type=int)
+    total_fish, tank_count = get_fish_stats(site_id)
+
+    return api_response("Total Fish Count", data={
+        "totalFishCount": total_fish,
+        "tankCount": tank_count
+    })
+
+
+def get_fish_stats(site_id=None):
     query = db.session.query(db.func.sum(TankStock.quantity))
+    tank_query = db.session.query(db.func.count(db.distinct(TankStock.tank_id)))
 
     if site_id and site_id > 0:
         query = query.join(Tank, Tank.tank_id == TankStock.tank_id).filter(Tank.site_id == site_id)
+        tank_query = tank_query.join(Tank, Tank.tank_id == TankStock.tank_id).filter(Tank.site_id == site_id)
 
-    current_total = query.scalar() or 0
+    total_fish = query.scalar() or 0
+    tank_count = tank_query.scalar() or 0
 
-    # # For "vs last week", assuming you have a timestamp
-    # last_week_start = datetime.utcnow() - timedelta(days=7)
-    # last_week_query = query.filter(TankStock.created_at >= last_week_start)
-    # last_week_total = last_week_query.scalar() or 0
+    return total_fish, tank_count
 
-    # percent_change = (
-    #     ((current_total - last_week_total) / last_week_total * 100)
-    #     if last_week_total > 0 else 0
-    # )
-
-    return api_response("Total Fish Count", data={
-        "totalFishCount": current_total,
-        # "percentChange": round(percent_change, 1)
-    })
 
 @stock_bp.route("/dashboard/total-active-tanks", methods=["GET"])
 def active_tanks():
