@@ -54,7 +54,7 @@ def get_tanks_paged():
     return api_response("Tanks retrieved successfully", data=paginated_data)
 
 
-@tanks_bp.route('', methods=['GET'])
+@tanks_bp.route('/', methods=['GET'])
 def get_all_tanks():
     status_filter = request.args.get('status')
     # Ensure it's an integer if present

@@ -27,7 +27,7 @@ def get_sites_paged():
     return api_response("Sites retrieved successfully", data=paginated_data)
 
 # Get all sites (optionally filtered by company_id)
-@bp.route('', methods=['GET'])
+@bp.route('/', methods=['GET'])
 def get_all_sites():
     company_id = request.args.get('companyId', type=int)
 

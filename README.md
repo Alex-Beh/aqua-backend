@@ -58,6 +58,7 @@ It helps you track changes to your database models and apply those changes to th
 - ✅ First-Time Setup
     Initializes the migrations folder and sets up the database schema:
     ```
+    python -m flask db migrate -m "New db"
     ./init_db.sh
     ```
 - 🔄 When You Add or Modify a Model
