@@ -92,3 +92,10 @@ class Tank(db.Model):
         
         next_number = existing_count + 1
         return f"T-{site_code}-{str(next_number).zfill(3)}"
+
+    def can_be_deleted(self):
+        """Check if the tank has no stock left (safe to delete)."""
+        for stock in self.stocks:
+            if stock.quantity > 0:
+                return False
+        return True

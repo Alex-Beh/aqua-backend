@@ -106,6 +106,9 @@ def delete_site(site_id):
     if not site or site.deleted_at:
         return api_response("Site not found", status_code=404)
     
+    if not site.can_be_deleted():
+        return api_response("Cannot delete: Site still has active tanks.", status_code=400)
+    
     site.soft_delete()
     db.session.commit()
     return api_response("Site deleted successfully")

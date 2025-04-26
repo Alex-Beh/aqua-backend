@@ -446,7 +446,10 @@ def get_fish_stats(site_id=None):
 
 
 def get_active_tank_count(site_id=None):
-    query = db.session.query(db.func.count(Tank.tank_id)).filter(db.func.lower(Tank.status) == "active")
+    query = db.session.query(db.func.count(Tank.tank_id)).filter(
+        db.func.lower(Tank.status) == "active",
+        Tank.deleted_at.is_(None)  # Exclude soft-deleted tanks
+    )
 
     if site_id and site_id > 0:
         query = query.filter(Tank.site_id == site_id)

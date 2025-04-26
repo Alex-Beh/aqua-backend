@@ -60,3 +60,10 @@ class FishType(db.Model):
         existing_count = cls.query.count()  # Count all, including soft-deleted
         next_number = existing_count + 1
         return f"{prefix}-{str(next_number).zfill(4)}"
+    
+    def can_be_deleted(self):
+        """Check if the fish type has no stock left (safe to delete)."""
+        for stock in self.stocks:
+            if stock.quantity > 0:
+                return False
+        return True

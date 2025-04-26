@@ -159,6 +159,9 @@ def delete_fish_type(type_id):
     if not fish_type or fish_type.deleted_at:
         return api_response("Fish type not found", status_code=404)
     
+    if not fish_type.can_be_deleted():
+        return api_response("Cannot delete: Fish type still has stock in tanks.", status_code=400)
+
     fish_type.soft_delete()
     db.session.commit()
     

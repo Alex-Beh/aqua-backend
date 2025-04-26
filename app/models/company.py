@@ -64,3 +64,14 @@ class Company(db.Model):
                 errors.append('Company name is required')
 
         return errors
+    
+    def can_be_deleted(self):
+        """Check if company can be deleted (no active sites attached)."""
+        from app.models.site import Site  # Import here to avoid circular import
+
+        active_sites = Site.query.filter(
+            Site.company_id == self.company_id,
+            Site.deleted_at.is_(None)
+        ).count()
+
+        return active_sites == 0

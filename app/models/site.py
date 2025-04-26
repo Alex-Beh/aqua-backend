@@ -101,3 +101,8 @@ class Site(db.Model):
                     errors['siteCode'] = "Site Code already exists"
 
         return errors if errors else None
+
+    def can_be_deleted(self):
+        """Check if site can be deleted (no active tanks attached)."""
+        active_tanks = [tank for tank in self.tanks if tank.deleted_at is None]
+        return len(active_tanks) == 0

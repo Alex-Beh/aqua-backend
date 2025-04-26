@@ -105,6 +105,9 @@ def delete_company(company_id):
     if not company or company.deleted_at:
         return api_response("Company not found", status_code=404)
     
+    if not company.can_be_deleted():
+        return api_response("Cannot delete: Company still has active sites.", status_code=400)
+    
     company.soft_delete()
     db.session.commit()
     

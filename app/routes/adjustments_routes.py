@@ -112,10 +112,18 @@ def _handle_stock_change(transaction_type: str):
         if not source_tank or source_tank.status.lower() != "active":
             return api_response(f"Source tank {tank_id} is not in use (inactive or deleted).", status_code=400)
 
+        # Check if stock take is in progress
+        if StockTake.is_stock_take_in_progress(tank_id):
+            return api_response(f"Tank {tank_id} has an active stock take (Draft or Pending). Adjustment not allowed.", status_code=400)
+
         if target_tank_id:
             target_tank = Tank.query.filter_by(tank_id=target_tank_id, deleted_at=None).first()
             if not target_tank or target_tank.status.lower() != "active":
                 return api_response(f"Target tank {target_tank_id} is not in use (inactive or deleted).", status_code=400)
+            
+            # CHECK the target tank
+            if StockTake.is_stock_take_in_progress(target_tank_id):
+                return api_response(f"Target tank {target_tank_id} has an active stock take (Draft or Pending). Adjustment not allowed.", status_code=400)
 
         # Step 3: Validate Fish Type
         fish_type = FishType.query.filter_by(type_id=fish_type_id, deleted_at=None).first()

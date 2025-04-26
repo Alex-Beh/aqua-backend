@@ -147,6 +147,9 @@ def delete_tank(tank_id):
     if not tank or tank.deleted_at:
         return api_response("Tank not found", status_code=404)
 
+    if not tank.can_be_deleted():
+        return api_response("Cannot delete: Tank still has fish stock.", status_code=400)
+
     tank.soft_delete()
     db.session.commit()
     return api_response("Tank deleted successfully")
