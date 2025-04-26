@@ -32,6 +32,7 @@ def _serialize_stock(ts: TankStock) -> dict:
 def list_adjustments():
     tank_id = request.args.get("tankId", type=int)
     fish_type_id = request.args.get("fishTypeId", type=int)  # Updated to fish_type_id
+    transaction_type = request.args.get("transactionType")
     since = request.args.get("since")  # ISO‑8601 strings
     until = request.args.get("until")
 
@@ -40,6 +41,8 @@ def list_adjustments():
         q = q.filter_by(tank_id=tank_id)
     if fish_type_id:
         q = q.filter_by(fish_type_id=fish_type_id)
+    if transaction_type:
+        q = q.filter(StockAdjustment.transaction_type == transaction_type.capitalize()) 
     if since:
         q = q.filter(StockAdjustment.transaction_date >= since)
     if until:
@@ -221,11 +224,19 @@ def create_stock_adjustment(transaction_type, tank_id, fish_type_id, quantity_be
         if not target_tank_id:
             raise ValueError("Target tank ID is required for TRANSFER")
 
+        # Get source and target tank info
+        source_tank = Tank.query.get(tank_id)
+        target_tank = Tank.query.get(target_tank_id)
+
         # Get the current quantity in the target tank before the transfer
         target_quantity_before = get_current_quantity(target_tank_id, fish_type_id) - quantity_change
 
         source_quantity_after = quantity_after  # This is from the source tank's update
         target_quantity_after = target_quantity_before + quantity_change #quantity_change is Orignal User Input
+
+        # Add transfer-related notes for source and target tanks, with information at the front and separated by a comma
+        updated_notes_source = f"(Transferred to tank {target_tank.tank_code} - {target_tank.tank_name}), {notes or ''}"
+        updated_notes_target = f"(Transferred from tank {source_tank.tank_code} - {source_tank.tank_name}), {notes or ''}"
 
        # Create adjustment records for both source and target tanks
         adjustments = [
@@ -236,7 +247,7 @@ def create_stock_adjustment(transaction_type, tank_id, fish_type_id, quantity_be
                 quantity_before=quantity_before,
                 quantity_after=source_quantity_after,
                 reason=reason,
-                notes=notes,
+                notes=updated_notes_source,
                 recorded_at=now
             ),
             StockAdjustment(
@@ -246,7 +257,7 @@ def create_stock_adjustment(transaction_type, tank_id, fish_type_id, quantity_be
                 quantity_before=target_quantity_before,
                 quantity_after=target_quantity_after,
                 reason=reason,
-                notes=notes,
+                notes=updated_notes_target,
                 recorded_at=now
             )
         ]
