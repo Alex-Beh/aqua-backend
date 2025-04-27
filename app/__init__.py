@@ -2,20 +2,39 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from flask_migrate import Migrate
+from flask_login import LoginManager
 import os
+from dotenv import load_dotenv
 
 db = SQLAlchemy()
 migrate = Migrate()  # Initialize here first
+login_manager = LoginManager()
 
 def create_app():
+      # Load environment variables from .env file
+    load_dotenv()
+
     app = Flask(__name__)
-    app.config.from_object("app.config.Config")
+    # app.config.from_object("app.config.Config")
+
+    # Now use the environment variables
+    app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
+    app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER')
+    app.config['MAX_CONTENT_LENGTH'] = int(os.getenv('MAX_CONTENT_LENGTH', 5242880))  # default to 5MB if not set
+    app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'default_secret_key')
 
     db.init_app(app)
     migrate.init_app(app, db)  # Migrate must be initialized AFTER db.init_app
-
+    login_manager.init_app(app)
+    
     CORS(app)
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+    from app.models.app_user import AppUser
+
+    @login_manager.user_loader
+    def load_user(user_id):
+        return AppUser.query.get(int(user_id))
 
     from app.routes import company_routes, site_routes, fish_type_routes, tank_routes
     app.register_blueprint(company_routes.bp)
@@ -27,5 +46,8 @@ def create_app():
     from app.routes import adjustments_routes, tank_stock_routes
     app.register_blueprint(adjustments_routes.adjust_bp)
     app.register_blueprint(tank_stock_routes.stock_bp)
+
+    from app.routes import auth_routes
+    app.register_blueprint(auth_routes.auth_bp)
 
     return app
