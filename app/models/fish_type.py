@@ -1,5 +1,12 @@
 from app import db
 from datetime import datetime
+import enum
+
+# Fish Size Enum
+class FishSize(enum.Enum):
+    SMALL = "small"
+    MEDIUM = "medium"
+    BIG = "big"
 
 # Fish Type 
 class FishType(db.Model):
@@ -9,6 +16,7 @@ class FishType(db.Model):
     type_code = db.Column(db.String(20), unique=True, nullable=False)
     common_name = db.Column(db.String(100), nullable=False)
     scientific_name = db.Column(db.String(100))
+    size = db.Column(db.Enum(FishSize), nullable=True)
     image_url = db.Column(db.String(255))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
@@ -24,6 +32,7 @@ class FishType(db.Model):
             'typeCode': self.type_code,
             'commonName': self.common_name,
             'scientificName': self.scientific_name,
+            'size': self.size.value if self.size else None,
             'imageUrl': self.image_url,
             'createdAt': self.created_at.isoformat() if self.created_at else None,
             'updatedAt': self.updated_at.isoformat() if self.updated_at else None,
@@ -51,6 +60,13 @@ class FishType(db.Model):
         # Required fields validation
         if not data.get('commonName'):
             errors['commonName'] = "Common Name is required"
+        
+        # Size validation if provided
+        if 'size' in data and data['size'] is not None:
+            try:
+                FishSize(data['size'])
+            except ValueError:
+                errors['size'] = f"Size must be one of: {', '.join([s.value for s in FishSize])}"
                 
         return errors if errors else None
     

@@ -95,12 +95,22 @@ def create_fish_type():
             image_url = f"/uploads/fish_images/{filename}"
     
     is_active = data.get('isActive', 'true').lower() == 'true'
+    
+    size = None
+    if 'size' in data and data.get('size'):
+        from app.models.fish_type import FishSize
+        try:
+            size = FishSize(data.get('size'))
+        except ValueError:
+            # If invalid size, validation should have caught it
+            pass
 
     # Create new fish type
     new_fish_type = FishType(
         type_code=FishType.generate_type_code(),
         common_name=data.get('commonName'),
         scientific_name=data.get('scientificName'),
+        size=size,
         image_url=image_url,
         is_active=is_active,
         created_at=datetime.utcnow()
@@ -116,6 +126,8 @@ def update_fish_type(type_id):
     fish_type = FishType.query.get(type_id)
     data = request.form
     
+    print("Received data:", data)
+
     # Validate only updatable fields
     validation_errors = FishType.validate_fields(data, for_update=True)
     if validation_errors:
@@ -133,6 +145,18 @@ def update_fish_type(type_id):
             fish_type.image_url = f"/uploads/fish_images/{filename}"
 
     is_active = data.get('isActive', str(fish_type.is_active)).lower() == 'true'  # Default to current value if not provided
+
+    # Handle size if provided
+    if 'size' in data:
+        from app.models.fish_type import FishSize
+        if data.get('size'):
+            try:
+                fish_type.size = FishSize(data.get('size'))
+            except ValueError:
+                # If invalid size, validation should have caught it
+                pass
+        else:
+            fish_type.size = None
 
     # Update fields if provided
     # if 'typeCode' in data:
