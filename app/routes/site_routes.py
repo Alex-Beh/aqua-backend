@@ -9,11 +9,11 @@ from app.decorators.roles import admin_required
 
 bp = Blueprint('site', __name__, url_prefix='/api/sites')
 
-# Apply login_required globally for all routes in this blueprint
-@bp.before_request
-@login_required
-def before_request():
-    pass
+# # Apply login_required globally for all routes in this blueprint
+# @bp.before_request
+# @login_required
+# def before_request():
+#     pass
 
 # Get a paginated list of sites (optionally filtered by company_id)
 @bp.route('/paging', methods=['GET'])

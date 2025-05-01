@@ -9,11 +9,11 @@ from app.utils import api_response, validate_json, paginate_response
 
 bp = Blueprint('company', __name__, url_prefix='/api/companies')
 
-# Apply login_required globally for all routes in this blueprint
-@bp.before_request
-@login_required
-def before_request():
-    pass
+# # Apply login_required globally for all routes in this blueprint
+# @bp.before_request
+# @login_required
+# def before_request():
+#     pass
 
 # API Routes - Company
 @bp.route('paging', methods=['GET'])
@@ -63,7 +63,7 @@ def get_all_sites(company_id):
 
 # Get a single company
 @bp.route('<int:company_id>', methods=['GET'])
-@admin_required
+# @admin_required
 def get_company(company_id):
     # Call service layer to get a company
     company = CompanyService.get_company(company_id)
@@ -73,20 +73,20 @@ def get_company(company_id):
 
 # Create a company
 @bp.route('', methods=['POST'])
-@admin_required
+# @admin_required
 def create_company():
     data = request.get_json()
     return CompanyService.create_company(data, current_user.id)
 
 # Update a company
 @bp.route('<int:company_id>', methods=['PUT'])
-@admin_required
+# @admin_required
 def update_company(company_id):
     data = request.get_json()
     return CompanyService.update_company(company_id, data, current_user.id)
 
 # Delete a company (soft delete)
 @bp.route('<int:company_id>', methods=['DELETE'])
-@admin_required
+# @admin_required
 def delete_company(company_id):
     return CompanyService.delete_company(company_id, current_user.id)
