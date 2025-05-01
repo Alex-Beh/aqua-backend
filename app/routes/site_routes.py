@@ -51,17 +51,17 @@ def get_site(site_id):
 # @admin_required
 def create_site():
     data = request.get_json()
-    return SiteService.create_site(data, user_id=current_user.id)
+    return SiteService.create_site(data, performed_by=current_user.name)
 
 # Update a site
 @bp.route('/<int:site_id>', methods=['PUT'])
 # @admin_required
 def update_site(site_id):
     data = request.get_json()
-    return SiteService.update_site(site_id, data, user_id=current_user.id)
+    return SiteService.update_site(site_id, data, performed_by=current_user.name)
 
 # Soft delete a site
 @bp.route('/<int:site_id>', methods=['DELETE'])
 # @admin_required
 def delete_site(site_id):
-    return SiteService.delete_site(site_id, user_id=current_user.id)
+    return SiteService.delete_site(site_id, performed_by=current_user.name)

@@ -31,7 +31,7 @@ def logout():
 def register():
     data = request.get_json()
 
-    new_user, validation_errors = validate_and_create_user(data)
+    new_user, validation_errors = validate_and_create_user(data, performed_by=current_user.name)
 
     if validation_errors:
         return api_response("One or more validation errors occurred", errors=validation_errors, status_code=400)

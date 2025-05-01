@@ -15,15 +15,15 @@ class StockAdjustment(db.Model):
     quantity_after = db.Column(db.Integer, nullable=False)
 
     reason = db.Column(db.String(255))   # Optional explanation
-    transaction_date = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    transaction_date = db.Column(db.DateTime, nullable=False, default=db.func.current_timestamp())
     reference_doc = db.Column(db.String(100))  # Proof or Receipt Number
     notes = db.Column(db.Text)  # Optional explanation
 
-    # recorded_by = db.Column(db.Integer, db.ForeignKey("app_users.user_id"), nullable=False)
+    recorded_by = db.Column(db.String(100))
     # recorded_by_signature = db.Column(db.LargeBinary)
-    recorded_at = db.Column(db.DateTime, default=datetime.utcnow)
+    recorded_at = db.Column(db.DateTime, default=db.func.current_timestamp())
 
-    # verified_by = db.Column(db.Integer, db.ForeignKey("app_users.user_id"))
+    verified_by = db.Column(db.String(100))
     # verified_by_signature = db.Column(db.LargeBinary)
     verified_at = db.Column(db.DateTime)
 
@@ -33,8 +33,8 @@ class StockAdjustment(db.Model):
     previous_adjustment_id = db.Column(db.Integer, db.ForeignKey("stock_adjustments.stock_adjustment_id"))
     version_number = db.Column(db.Integer, default=1)
 
-    # updated_by = db.Column(db.Integer, db.ForeignKey("app_users.user_id"))
-    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    updated_by = db.Column(db.String(100))
+    updated_at = db.Column(db.DateTime, onupdate=db.func.current_timestamp())
 
     # Relationships (plain ForeignKey; no backref needed but you can add if desired)
     tank = db.relationship("Tank", lazy="joined")

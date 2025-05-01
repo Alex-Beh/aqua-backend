@@ -8,7 +8,9 @@ class StockTake(db.Model):
     tank_id = db.Column(db.Integer, db.ForeignKey('tanks.tank_id'), nullable=False)
     site_id = db.Column(db.Integer, db.ForeignKey('sites.site_id'), nullable=False)
 
-    initiate_at = db.Column(db.DateTime, default=datetime.utcnow)
+    initiate_by = db.Column(db.String(100))
+    initiate_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+    finalize_by = db.Column(db.String(100))
     finalize_at = db.Column(db.DateTime)
 
     remarks = db.Column(db.Text)
@@ -16,8 +18,10 @@ class StockTake(db.Model):
 
     status = db.Column(db.String(20), default='Draft')  # Draft, Pending, Approve, Rejected, Cancelled
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    created_by = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+    updated_by = db.Column(db.String(100))
+    updated_at = db.Column(db.DateTime, onupdate=db.func.current_timestamp())
 
     # Relationships
     tank = db.relationship("Tank", backref="stock_takes")

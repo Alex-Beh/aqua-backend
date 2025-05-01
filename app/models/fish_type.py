@@ -18,8 +18,11 @@ class FishType(db.Model):
     scientific_name = db.Column(db.String(100))
     size = db.Column(db.Enum(FishSize), nullable=True)
     image_url = db.Column(db.String(255))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    created_by = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+    updated_by = db.Column(db.String(100))
+    updated_at = db.Column(db.DateTime, onupdate=db.func.current_timestamp())
+    deleted_by = db.Column(db.String(100))
     deleted_at = db.Column(db.DateTime)
     is_active = db.Column(db.Boolean, default=True)
     
@@ -43,8 +46,8 @@ class FishType(db.Model):
     # Soft delete logic
     def soft_delete(self, user_id=None):
         """Marks the record as deleted"""
-        self.deleted_at = datetime.utcnow()
-        self.updated_at = datetime.utcnow()
+        self.deleted_at = db.func.current_timestamp()
+        self.updated_at = db.func.current_timestamp()
         #self.deleted_by = user_id  # If tracking who deleted
         db.session.add(self)
         return self

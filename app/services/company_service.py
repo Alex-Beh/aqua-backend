@@ -34,7 +34,7 @@ class CompanyService:
         return company.to_dict()
 
     @staticmethod
-    def create_company(data, user_id):
+    def create_company(data, performed_by):
         validation_errors = Company.validate_fields(data)
         if validation_errors:
             return api_response("Validation errors occurred", errors=validation_errors, status_code=400)
@@ -45,7 +45,7 @@ class CompanyService:
             hotline=data.get('hotline'),
             email=data.get('email'),
             address=data.get('address'),
-            created_by=user_id,
+            created_by=performed_by,
             created_at=db.func.current_timestamp()
         )
         db.session.add(new_company)
@@ -53,7 +53,7 @@ class CompanyService:
         return api_response("Company created successfully", data=new_company.to_dict(), status_code=201)
     
     @staticmethod
-    def update_company(company_id, data, user_id):
+    def update_company(company_id, data, performed_by):
         company = Company.query.get(company_id)
         if not company or company.deleted_at:
             return api_response("Company not found", status_code=404)
@@ -66,12 +66,13 @@ class CompanyService:
         company.hotline = data.get('hotline', company.hotline)
         company.email = data.get('email', company.email)
         company.address = data.get('address', company.address)
-        company.updated_by = user_id
+        company.updated_by = performed_by
+        company.updated_at = db.func.current_timestamp()
         db.session.commit()
         return api_response("Company updated successfully", data=company.to_dict())
     
     @staticmethod
-    def delete_company(company_id, user_id):
+    def delete_company(company_id, performed_by):
         company = Company.query.get(company_id)
         if not company or company.deleted_at:
             return api_response("Company not found", status_code=404)
@@ -83,8 +84,8 @@ class CompanyService:
         # Perform soft delete logic
         company.updated_at = db.func.current_timestamp()
         company.deleted_at = db.func.current_timestamp()
-        if user_id:
-            company.deleted_by = user_id
+        if performed_by:
+            company.deleted_by = performed_by
         db.session.add(company)
         db.session.commit()
 

@@ -16,7 +16,7 @@ class TankStock(db.Model):
     tank_id = db.Column(db.Integer, db.ForeignKey("tanks.tank_id"), nullable=False)
     fish_type_id = db.Column(db.Integer, db.ForeignKey("fish_types.type_id"), nullable=False)
     quantity = db.Column(db.Integer, default=0)
-    last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_updated = db.Column(db.DateTime, default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
 
     tank = db.relationship("Tank", back_populates="stocks")
     fish_type = db.relationship("FishType", back_populates="stocks")

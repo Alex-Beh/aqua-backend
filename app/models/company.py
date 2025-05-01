@@ -11,11 +11,11 @@ class Company(db.Model):
     hotline = db.Column(db.String(50))
     email = db.Column(db.String(100))
     address = db.Column(db.Text)
-    created_by = db.Column(db.Integer)
+    created_by = db.Column(db.String(100))
     created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
-    updated_by = db.Column(db.Integer)
+    updated_by = db.Column(db.String(100))
     updated_at = db.Column(db.DateTime, onupdate=db.func.current_timestamp())
-    deleted_by = db.Column(db.Integer)
+    deleted_by = db.Column(db.String(100))
     deleted_at = db.Column(db.DateTime)
 
     def to_dict(self):

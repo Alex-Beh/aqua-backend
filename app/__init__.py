@@ -58,7 +58,8 @@ def create_app():
     app.register_blueprint(adjustments_routes.adjust_bp)
     app.register_blueprint(tank_stock_routes.stock_bp)
 
-    from app.routes import auth_routes
+    from app.routes import auth_routes, route_routes
+    app.register_blueprint(route_routes.role_bp)
     app.register_blueprint(auth_routes.auth_bp)
 
     return app

@@ -26,7 +26,7 @@ def create_user(username, password, roleId, staffId=None, name=None, emailId=Non
     except Exception as e:
         raise Exception(f"Error creating user: {str(e)}")
     
-def validate_and_create_user(data):
+def validate_and_create_user(data, performed_by=None):
     validation_errors = validate_user_data(data)
     if validation_errors:
         return None, validation_errors
@@ -39,7 +39,9 @@ def validate_and_create_user(data):
             staffId=data.get('staffId'),
             name=data.get('name'),
             emailId=data.get('emailId'),
-            phoneNumber=data.get('phoneNumber')
+            phoneNumber=data.get('phoneNumber'),
+            created_by=performed_by,
+            created_at=db.func.current_timestamp()
         )
         return new_user, None
     except Exception as e:

@@ -20,11 +20,11 @@ class Site(db.Model):
     site_contact_id = db.Column(db.Integer)  # FK to user table (optional)
     is_active = db.Column(db.Boolean, default=True)
 
-    created_by = db.Column(db.Integer)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_by = db.Column(db.Integer)
-    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
-    deleted_by = db.Column(db.Integer)
+    created_by = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+    updated_by = db.Column(db.String(100))
+    updated_at = db.Column(db.DateTime, onupdate=db.func.current_timestamp())
+    deleted_by = db.Column(db.String(100))
     deleted_at = db.Column(db.DateTime)
 
     # Relationships -----------------------------------------------------------

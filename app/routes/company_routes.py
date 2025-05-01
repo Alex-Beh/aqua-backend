@@ -76,17 +76,17 @@ def get_company(company_id):
 # @admin_required
 def create_company():
     data = request.get_json()
-    return CompanyService.create_company(data, current_user.id)
+    return CompanyService.create_company(data, performed_by=current_user.name)
 
 # Update a company
 @bp.route('<int:company_id>', methods=['PUT'])
 # @admin_required
 def update_company(company_id):
     data = request.get_json()
-    return CompanyService.update_company(company_id, data, current_user.id)
+    return CompanyService.update_company(company_id, data, performed_by=current_user.name)
 
 # Delete a company (soft delete)
 @bp.route('<int:company_id>', methods=['DELETE'])
 # @admin_required
 def delete_company(company_id):
-    return CompanyService.delete_company(company_id, current_user.id)
+    return CompanyService.delete_company(company_id, performed_by=current_user.name)

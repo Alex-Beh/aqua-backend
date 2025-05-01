@@ -28,7 +28,7 @@ class SiteService:
         return site.to_dict()
 
     @staticmethod
-    def create_site(data, user_id=None):
+    def create_site(data, performed_by=None):
         validation_errors = SiteService.validate_fields(data)
         if validation_errors:
             return api_response("Validation errors occurred", errors=validation_errors, status_code=400)
@@ -41,7 +41,7 @@ class SiteService:
             hotline=data.get('hotline'),
             site_manager_id=data.get('siteManagerId'),
             site_contact_id=data.get('siteContactId'),
-            created_by=user_id,
+            created_by=performed_by,
             created_at=db.func.current_timestamp()
         )
 
@@ -50,7 +50,7 @@ class SiteService:
         return api_response("Site created successfully", data=new_site.to_dict(), status_code=201)
 
     @staticmethod
-    def update_site(site_id, data, user_id=None):
+    def update_site(site_id, data, performed_by=None):
         site = Site.query.get(site_id)
         if not site or site.deleted_at:
             return api_response("Site not found", status_code=404)
@@ -64,14 +64,14 @@ class SiteService:
         site.hotline = data.get('hotline', site.hotline)
         site.site_manager_id = data.get('siteManagerId', site.site_manager_id)
         site.site_contact_id = data.get('siteContactId', site.site_contact_id)
-        site.updated_by = user_id
+        site.updated_by = performed_by
         site.updated_at = db.func.current_timestamp()
 
         db.session.commit()
         return api_response("Site updated successfully", data=site.to_dict())
 
     @staticmethod
-    def delete_site(site_id, user_id=None):
+    def delete_site(site_id, performed_by=None):
         site = Site.query.get(site_id)
         if not site or site.deleted_at:
             return api_response("Site not found", status_code=404)
@@ -79,7 +79,7 @@ class SiteService:
         if not SiteService.can_be_deleted(site):
             return api_response("Cannot delete: Site still has active tanks.", status_code=400)
 
-        SiteService.soft_delete(site, user_id=user_id)
+        SiteService.soft_delete(site, performed_by=performed_by)
         db.session.commit()
         return api_response("Site deleted successfully")
 
@@ -115,8 +115,8 @@ class SiteService:
         return all(tank.deleted_at is not None for tank in site.tanks)
 
     @staticmethod
-    def soft_delete(site: Site, user_id=None):
+    def soft_delete(site: Site, performed_by=None):
         site.updated_at = db.func.current_timestamp()
         site.deleted_at = db.func.current_timestamp()
-        site.deleted_by = user_id
+        site.deleted_by = performed_by
         db.session.add(site)
