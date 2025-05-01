@@ -33,3 +33,6 @@ class Company(db.Model):
             'deletedBy': self.deleted_by,
             'deletedAt': self.deleted_at.isoformat() if self.deleted_at else None,
         }
+    
+    def __repr__(self):
+        return f"<Company {self.company_code}>"

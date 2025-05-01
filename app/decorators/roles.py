@@ -6,7 +6,7 @@ from app.utils import api_response
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if current_user.role_id != 1:  # Assuming '1' is the admin role ID
+        if not current_user.is_authenticated or not current_user.is_admin:
             # Return a custom response with api_response
             return api_response(
                 "You do not have permission to access this resource", 

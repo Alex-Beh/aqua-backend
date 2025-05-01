@@ -6,6 +6,8 @@ from flask_login import LoginManager
 import os
 from dotenv import load_dotenv
 
+from app.utils.api_response import api_response
+
 db = SQLAlchemy()
 migrate = Migrate()  # Initialize here first
 login_manager = LoginManager()
@@ -36,6 +38,15 @@ def create_app():
     def load_user(user_id):
         return AppUser.query.get(int(user_id))
 
+    # Custom handler for unauthenticated requests
+    @login_manager.unauthorized_handler
+    def unauthorized():
+        return api_response(
+            message="You need to log in to access this resource",
+            success=False,
+            status_code=401
+        )
+    
     from app.routes import company_routes, site_routes, fish_type_routes, tank_routes
     app.register_blueprint(company_routes.bp)
     app.register_blueprint(site_routes.bp)

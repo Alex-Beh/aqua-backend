@@ -39,6 +39,9 @@ class AppUser(db.Model, UserMixin):
     def is_active(self):
         return self.status.lower() == 'active'
     
+    @property
+    def is_admin(self):
+        return self.role and self.role.role_name.lower() == 'admin'
     
     def to_dict(self):
         """

@@ -1,4 +1,3 @@
-from flask_login import current_user
 from app import db
 from app.models import Company
 from app.models.site import Site
@@ -46,14 +45,15 @@ class CompanyService:
             hotline=data.get('hotline'),
             email=data.get('email'),
             address=data.get('address'),
-            created_by=user_id
+            created_by=user_id,
+            created_at=db.func.current_timestamp()
         )
         db.session.add(new_company)
         db.session.commit()
         return api_response("Company created successfully", data=new_company.to_dict(), status_code=201)
     
     @staticmethod
-    def update_company(company_id, data):
+    def update_company(company_id, data, user_id):
         company = Company.query.get(company_id)
         if not company or company.deleted_at:
             return api_response("Company not found", status_code=404)
@@ -66,7 +66,7 @@ class CompanyService:
         company.hotline = data.get('hotline', company.hotline)
         company.email = data.get('email', company.email)
         company.address = data.get('address', company.address)
-        company.updated_by = current_user.id
+        company.updated_by = user_id
         db.session.commit()
         return api_response("Company updated successfully", data=company.to_dict())
     
@@ -81,6 +81,7 @@ class CompanyService:
             return api_response("Cannot delete: Company still has active sites.", status_code=400)
 
         # Perform soft delete logic
+        company.updated_at = db.func.current_timestamp()
         company.deleted_at = db.func.current_timestamp()
         if user_id:
             company.deleted_by = user_id

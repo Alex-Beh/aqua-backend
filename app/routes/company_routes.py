@@ -9,9 +9,14 @@ from app.utils import api_response, validate_json, paginate_response
 
 bp = Blueprint('company', __name__, url_prefix='/api/companies')
 
+# Apply login_required globally for all routes in this blueprint
+@bp.before_request
+@login_required
+def before_request():
+    pass
+
 # API Routes - Company
 @bp.route('paging', methods=['GET'])
-@login_required
 def get_companies_paged():
     page = request.args.get('page', 1, type=int)
     size = request.args.get('size', 10, type=int)
@@ -28,7 +33,6 @@ def get_companies_paged():
 
 # Get all companies
 @bp.route('', methods=['GET'])
-@login_required
 def get_all_companies():
     # Call service layer to get all companies
     companies = CompanyService.get_all_companies()
@@ -36,7 +40,6 @@ def get_all_companies():
 
 # Get a paginated list of sites for a company
 @bp.route('<int:company_id>/sites/paging', methods=['GET'])
-@login_required
 def get_sites_paged(company_id):
     page = request.args.get('page', 1, type=int)
     size = request.args.get('size', 10, type=int)
@@ -53,7 +56,6 @@ def get_sites_paged(company_id):
 
 # Get all sites for a company
 @bp.route('<int:company_id>/sites', methods=['GET'])
-@login_required
 def get_all_sites(company_id):
     # Call service layer to get all sites for a company
     sites = CompanyService.get_all_sites(company_id)
@@ -61,7 +63,6 @@ def get_all_sites(company_id):
 
 # Get a single company
 @bp.route('<int:company_id>', methods=['GET'])
-@login_required
 @admin_required
 def get_company(company_id):
     # Call service layer to get a company
@@ -72,7 +73,6 @@ def get_company(company_id):
 
 # Create a company
 @bp.route('', methods=['POST'])
-@login_required
 @admin_required
 def create_company():
     data = request.get_json()
@@ -80,15 +80,13 @@ def create_company():
 
 # Update a company
 @bp.route('<int:company_id>', methods=['PUT'])
-@login_required
 @admin_required
 def update_company(company_id):
     data = request.get_json()
-    return CompanyService.update_company(company_id, data)
+    return CompanyService.update_company(company_id, data, current_user.id)
 
 # Delete a company (soft delete)
 @bp.route('<int:company_id>', methods=['DELETE'])
-@login_required
 @admin_required
 def delete_company(company_id):
     return CompanyService.delete_company(company_id, current_user.id)
