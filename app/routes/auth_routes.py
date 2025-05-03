@@ -9,6 +9,9 @@ from app.utils import api_response
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
 
+def get_performed_by():
+    return current_user.name if current_user.is_authenticated else "Anonymous"
+
 @auth_bp.route('/login', methods=['POST'])
 def login():
     data = request.json
@@ -31,7 +34,7 @@ def logout():
 def register():
     data = request.get_json()
 
-    new_user, validation_errors = validate_and_create_user(data, performed_by=current_user.name)
+    new_user, validation_errors = validate_and_create_user(data, performed_by=get_performed_by())
 
     if validation_errors:
         return api_response("One or more validation errors occurred", errors=validation_errors, status_code=400)

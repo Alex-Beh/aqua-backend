@@ -4,7 +4,6 @@ from app.utils import paginate_response
 from datetime import datetime
 
 from app.utils.api_response import api_response
-
 class TankService:
 
     @staticmethod
@@ -59,6 +58,7 @@ class TankService:
             tank_name=data['tankName'],
             tank_code=tank_code.upper(),
             capacity=data.get('capacity'),
+            size=data.get('size', 'medium').lower(),
             status=data.get('status', 'Active').capitalize(),
             created_at=db.func.current_timestamp(),
             created_by=performed_by
@@ -82,6 +82,10 @@ class TankService:
         tank.tank_name = data.get('tankName', tank.tank_name)
         tank.capacity = data.get('capacity', tank.capacity)
         tank.status = data.get('status', tank.status).capitalize()
+
+        if 'size' in data:
+            tank.size = data['size'].lower()
+                
         tank.updated_at = db.func.current_timestamp()
         tank.updated_by = performed_by
         db.session.commit()
@@ -115,6 +119,11 @@ class TankService:
             site_id = data['siteId']
             prefix = data['prefix']
             status = data.get('status', 'Active')
+            size = data.get('size', 'medium').lower()
+            capacity = data.get('capacity', 50)
+
+            if capacity == 0:  # Adjust capacity if it is set to 0
+                capacity = 50
 
             existing_count = Tank.query.filter_by(site_id=site_id).count()
             if existing_count + count > 999:
@@ -129,6 +138,8 @@ class TankService:
                     tank_code=tank_code,
                     site_id=site_id,
                     status=status,
+                    size=size,
+                    capacity=capacity,
                     created_at=db.func.current_timestamp(),
                     created_by=performed_by
                 )
@@ -174,6 +185,25 @@ class TankService:
                 errors['status'] = "Status is required"
             elif status.lower() not in ['active', 'maintenance', 'retired']:
                 errors['status'] = "Invalid status value"
+
+        # Capacity validation (ensure it is a positive integer or zero)
+        if 'capacity' in data:
+            try:
+                capacity = int(data['capacity'])
+                if capacity < 0:
+                    errors['capacity'] = "Capacity must be a positive number or zero."
+            except (ValueError, TypeError):
+                errors['capacity'] = "Capacity must be a valid number."
+        else:
+            data['capacity'] = 50
+
+        # Size validation
+        if 'size' in data and data['size'] is not None:
+            size = data['size'].lower()
+            valid_sizes = ['small', 'medium', 'big']
+
+            if size not in valid_sizes:
+                errors['size'] = f"Size must be one of: {', '.join(valid_sizes)}"
 
         return errors if errors else None
 

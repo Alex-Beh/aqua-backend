@@ -15,6 +15,9 @@ bp = Blueprint('site', __name__, url_prefix='/api/sites')
 # def before_request():
 #     pass
 
+def get_performed_by():
+    return current_user.name if current_user.is_authenticated else "Anonymous"
+
 # Get a paginated list of sites (optionally filtered by company_id)
 @bp.route('/paging', methods=['GET'])
 def get_sites_paged():
@@ -51,17 +54,17 @@ def get_site(site_id):
 # @admin_required
 def create_site():
     data = request.get_json()
-    return SiteService.create_site(data, performed_by=current_user.name)
+    return SiteService.create_site(data, performed_by=get_performed_by())
 
 # Update a site
 @bp.route('/<int:site_id>', methods=['PUT'])
 # @admin_required
 def update_site(site_id):
     data = request.get_json()
-    return SiteService.update_site(site_id, data, performed_by=current_user.name)
+    return SiteService.update_site(site_id, data, performed_by=get_performed_by())
 
 # Soft delete a site
 @bp.route('/<int:site_id>', methods=['DELETE'])
 # @admin_required
 def delete_site(site_id):
-    return SiteService.delete_site(site_id, performed_by=current_user.name)
+    return SiteService.delete_site(site_id, performed_by=get_performed_by())

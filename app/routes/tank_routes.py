@@ -9,7 +9,7 @@ Register in app.py:
 from flask import Blueprint, request, jsonify
 from datetime import datetime
 
-from flask_login import current_user
+from flask_login import current_user, login_required
 from app.models.site import Site
 from app.services.tank_service import TankService
 from app.utils import api_response, validate_json, paginate_response
@@ -27,10 +27,13 @@ def _serialize(tank: Tank) -> dict:
 tanks_bp = Blueprint("tanks_bp", __name__, url_prefix="/api/tanks")
 
 # # Apply login_required globally for all routes in this blueprint
-# @bp.before_request
+# @tanks_bp.before_request
 # @login_required
 # def before_request():
 #     pass
+
+def get_performed_by():
+    return current_user.name if current_user.is_authenticated else "Anonymous"
 
 # Get a paginated list of tanks (optionally filtered by status and siteId)
 @tanks_bp.route('/paging', methods=['GET'])
@@ -72,18 +75,18 @@ def get_tank_by_code(tank_code):
 @tanks_bp.route("", methods=["POST"])
 def create_tank():
     data = request.get_json()
-    return TankService.create(data, performed_by=current_user.name)
+    return TankService.create(data, performed_by=get_performed_by())
 
 @tanks_bp.route('/<int:tank_id>', methods=['PUT'])
 def update_tank(tank_id):
     data = request.get_json()
-    return TankService.update(tank_id, data, performed_by=current_user.name)
+    return TankService.update(tank_id, data, performed_by=get_performed_by())
 
 @tanks_bp.route('/<int:tank_id>', methods=['DELETE'])
 def delete_tank(tank_id):
-    return TankService.delete(tank_id, performed_by=current_user.name)
+    return TankService.delete(tank_id, performed_by=get_performed_by())
 
 @tanks_bp.route('/batch', methods=['POST'])
 def create_tank_batch():
     data = request.get_json()
-    return TankService.batch_create(data, performed_by=current_user.name)
+    return TankService.batch_create(data, performed_by=get_performed_by())

@@ -176,9 +176,6 @@ def update_fish_type(type_id):
 
 @bp.route('<int:type_id>', methods=['DELETE'])
 def delete_fish_type(type_id):
-    # if not current_user.is_admin:  # Add your auth check
-    #     return jsonify({'error': 'Unauthorized'}), 403
-    
     fish_type = FishType.query.get(type_id)
     if not fish_type or fish_type.deleted_at:
         return api_response("Fish type not found", status_code=404)

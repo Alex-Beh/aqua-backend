@@ -15,6 +15,9 @@ bp = Blueprint('company', __name__, url_prefix='/api/companies')
 # def before_request():
 #     pass
 
+def get_performed_by():
+    return current_user.name if current_user.is_authenticated else "Anonymous"
+
 # API Routes - Company
 @bp.route('paging', methods=['GET'])
 def get_companies_paged():
@@ -76,17 +79,17 @@ def get_company(company_id):
 # @admin_required
 def create_company():
     data = request.get_json()
-    return CompanyService.create_company(data, performed_by=current_user.name)
+    return CompanyService.create_company(data, performed_by=get_performed_by())
 
 # Update a company
 @bp.route('<int:company_id>', methods=['PUT'])
 # @admin_required
 def update_company(company_id):
     data = request.get_json()
-    return CompanyService.update_company(company_id, data, performed_by=current_user.name)
+    return CompanyService.update_company(company_id, data, performed_by=get_performed_by())
 
 # Delete a company (soft delete)
 @bp.route('<int:company_id>', methods=['DELETE'])
 # @admin_required
 def delete_company(company_id):
-    return CompanyService.delete_company(company_id, performed_by=current_user.name)
+    return CompanyService.delete_company(company_id, performed_by=get_performed_by())
