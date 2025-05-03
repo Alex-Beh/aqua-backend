@@ -1,6 +1,8 @@
+from flask_cors import CORS
 from app import create_app, db
 
 app = create_app()
+CORS(app)
 
 # Run the server
 if __name__ == '__main__':
