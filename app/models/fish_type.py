@@ -29,60 +29,68 @@ class FishType(db.Model):
     # Relationships
     stocks = db.relationship("TankStock", back_populates="fish_type", cascade="all, delete-orphan")
 
-    def to_dict(self):
-        return {
+    def to_dict(self, include_inactive=False):
+        data = {
             'typeId': self.type_id,
             'typeCode': self.type_code,
             'commonName': self.common_name,
             'scientificName': self.scientific_name,
             'size': self.size.value if self.size else None,
             'imageUrl': self.image_url,
+            'isActive': self.is_active,
+            'createdBy': self.created_by,
             'createdAt': self.created_at.isoformat() if self.created_at else None,
+            'updatedBy': self.updated_by,
             'updatedAt': self.updated_at.isoformat() if self.updated_at else None,
-            'deletedAt': self.deleted_at.isoformat() if self.deleted_at else None,
-            'isActive': self.is_active
+            'deletedBy': self.deleted_by,
+            'deletedAt': self.deleted_at.isoformat() if self.deleted_at else None
         }
+        
+        if not include_inactive and not self.is_active:
+            return None  # Exclude inactive fish types
+        return data
+
     
-    # Soft delete logic
-    def soft_delete(self, user_id=None):
-        """Marks the record as deleted"""
-        self.deleted_at = db.func.current_timestamp()
-        self.updated_at = db.func.current_timestamp()
-        #self.deleted_by = user_id  # If tracking who deleted
-        db.session.add(self)
-        return self
+    # # Soft delete logic
+    # def soft_delete(self, user_id=None):
+    #     """Marks the record as deleted"""
+    #     self.deleted_at = db.func.current_timestamp()
+    #     self.updated_at = db.func.current_timestamp()
+    #     #self.deleted_by = user_id  # If tracking who deleted
+    #     db.session.add(self)
+    #     return self
         
-    @classmethod
-    def validate_fields(cls, data, for_update=False):
-        """Unified validation returning consistent error format
-        Returns:
-            dict: {field: error_message} if errors, None if valid
-        """
-        errors = {}
+    # @classmethod
+    # def validate_fields(cls, data, for_update=False):
+    #     """Unified validation returning consistent error format
+    #     Returns:
+    #         dict: {field: error_message} if errors, None if valid
+    #     """
+    #     errors = {}
         
-        # Required fields validation
-        if not data.get('commonName'):
-            errors['commonName'] = "Common Name is required"
+    #     # Required fields validation
+    #     if not data.get('commonName'):
+    #         errors['commonName'] = "Common Name is required"
         
-        # Size validation if provided
-        if 'size' in data and data['size'] is not None:
-            try:
-                FishSize(data['size'])
-            except ValueError:
-                errors['size'] = f"Size must be one of: {', '.join([s.value for s in FishSize])}"
+    #     # Size validation if provided
+    #     if 'size' in data and data['size'] is not None:
+    #         try:
+    #             FishSize(data['size'])
+    #         except ValueError:
+    #             errors['size'] = f"Size must be one of: {', '.join([s.value for s in FishSize])}"
                 
-        return errors if errors else None
+    #     return errors if errors else None
     
-    @classmethod
-    def generate_type_code(cls):
-        prefix = 'FISH'
-        existing_count = cls.query.count()  # Count all, including soft-deleted
-        next_number = existing_count + 1
-        return f"{prefix}-{str(next_number).zfill(4)}"
+    # @classmethod
+    # def generate_type_code(cls):
+    #     prefix = 'FISH'
+    #     existing_count = cls.query.count()  # Count all, including soft-deleted
+    #     next_number = existing_count + 1
+    #     return f"{prefix}-{str(next_number).zfill(4)}"
     
-    def can_be_deleted(self):
-        """Check if the fish type has no stock left (safe to delete)."""
-        for stock in self.stocks:
-            if stock.quantity > 0:
-                return False
-        return True
+    # def can_be_deleted(self):
+    #     """Check if the fish type has no stock left (safe to delete)."""
+    #     for stock in self.stocks:
+    #         if stock.quantity > 0:
+    #             return False
+    #     return True
