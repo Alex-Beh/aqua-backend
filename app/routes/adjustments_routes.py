@@ -12,7 +12,6 @@ from app.models.stock_take_item import StockTakeItem
 from app.utils import api_response, validate_json, paginate_response
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from sqlalchemy.orm import joinedload
-from app.routes.tank_stock_routes import get_tank_stock_list
 
 # ---------------------------------------------------------------------------
 # Stock‑adjustment endpoints ------------------------------------------------
@@ -438,6 +437,21 @@ def update_stock_take(stock_take_id):
     except SQLAlchemyError as e:
         db.session.rollback()
         return api_response("Unexpected DB error", errors=str(e), status_code=500)
+
+def get_tank_stock_list(tank_id=None, fish_type_id=None, site_id=None):
+    q = TankStock.query.options(
+        joinedload(TankStock.tank),
+        joinedload(TankStock.fish_type)
+    ).join(Tank).join(FishType)
+
+    # Apply filters
+    if tank_id and tank_id > 0:
+        q = q.filter(TankStock.tank_id == tank_id)
+        
+    # Always apply consistent ordering
+    q = q.order_by(Tank.tank_name, FishType.common_name)
+
+    return [ts.to_dict() for ts in q.all()]
 
 
 def extract_fish_stock_info(tank_id):

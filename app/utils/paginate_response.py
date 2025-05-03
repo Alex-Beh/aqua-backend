@@ -12,7 +12,8 @@ def paginate_response(query, page, size, model_class, sort_field=None, sort_orde
     :return: A dictionary with paginated and sorted data
     """
     # Sorting logic
-    if sort_field:
+    # Only apply sort if not already applied (assuming external logic handles it)
+    if sort_field and not query._order_by_clauses:
         sort_func = getattr(model_class, sort_field, None)
         if sort_func:
             if sort_order == 'desc':
