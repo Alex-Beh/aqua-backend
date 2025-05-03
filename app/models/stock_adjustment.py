@@ -70,11 +70,14 @@ class StockAdjustment(db.Model):
             "notes": self.notes,
             "transactionDate": self.transaction_date.isoformat(),
             "referenceDoc": self.reference_doc,
+            'recordedBy': self.recorded_by,
             "recordedAt": self.recorded_at.isoformat() if self.recorded_at else None,
+            'verifiedBy': self.verified_by,
             "verifiedAt": self.verified_at.isoformat() if self.verified_at else None,
             "isVoided": self.is_voided,
             "voidReason": self.void_reason,
             "previousAdjustmentId": self.previous_adjustment_id,
             "versionNumber": self.version_number,
+            'updatedBy': self.updated_by,
             "updatedAt": self.updated_at.isoformat() if self.updated_at else None
         }

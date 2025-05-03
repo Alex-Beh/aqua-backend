@@ -64,6 +64,11 @@ def validate_user_data(data, for_update=False):
         if existing_user and not for_update:
             errors['username'] = "Username already taken"
 
+    # Validate name
+    name = data.get('name')
+    if name and len(name) > 100:
+        errors['name'] = "Name cannot be more than 100 characters"
+
     # Validate password
     password = data.get('password')
     if not password:

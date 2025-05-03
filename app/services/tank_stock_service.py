@@ -351,13 +351,13 @@ class TankStockService:
     @staticmethod
     def get_fish_summary(site_id=None, detailed=False):
         total_fish, tank_with_fish_count = TankStockService.get_fish_stats(site_id)
-        active_tank_count = TankStockService.get_active_tank_count(site_id)
+        # active_tank_count = TankStockService.get_active_tank_count(site_id)
         fish_type_count = TankStockService.get_fish_type_count(site_id)
 
         summary = {
             "totalFishCount": total_fish,
             "tankWithFishCount": tank_with_fish_count,
-            "activeTankCount": active_tank_count,
+            "activeTankCount": tank_with_fish_count,
             "fishTypeCount": fish_type_count,
         }
 

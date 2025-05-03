@@ -2,6 +2,8 @@
 from flask import Blueprint, request, jsonify
 from datetime import datetime, timedelta
 
+from flask_login import current_user
+
 from app import db
 from app.models import StockAdjustment
 from app.models.fish_type import FishType
@@ -17,6 +19,15 @@ from sqlalchemy.orm import joinedload
 # Stock‑adjustment endpoints ------------------------------------------------
 # ---------------------------------------------------------------------------
 adjust_bp  = Blueprint("adjust_bp",  __name__, url_prefix="/api/stock-adjustments")
+
+# # Apply login_required globally for all routes in this blueprint
+# @tanks_bp.before_request
+# @login_required
+# def before_request():
+#     pass
+
+def get_performed_by():
+    return current_user.name if current_user.is_authenticated else "Anonymous"
 
 # --------------------- Serialization ---------------------
 def _serialize_stock(ts: TankStock) -> dict:
@@ -216,12 +227,12 @@ def get_current_quantity(tank_id, fish_type_id):
 
 # --------------------- Adjustment Record ---------------------
 def create_stock_adjustment(transaction_type, tank_id, fish_type_id, quantity_before, quantity_after, reason, notes, quantity_change=None, target_tank_id=None):
-    now = datetime.utcnow()
+    now = db.func.current_timestamp()
     transaction_type_clean = transaction_type.capitalize()
 
     if transaction_type == "TRANSFER":
         if not target_tank_id:
-            raise ValueError("Target tank ID is required for TRANSFER")
+            raise ValueError("Target tank ID is required for Transfer Action")
 
         # Get source and target tank info
         source_tank = Tank.query.get(tank_id)
@@ -247,6 +258,7 @@ def create_stock_adjustment(transaction_type, tank_id, fish_type_id, quantity_be
                 quantity_after=source_quantity_after,
                 reason=reason,
                 notes=updated_notes_source,
+                recorded_by=get_performed_by(),
                 recorded_at=now
             ),
             StockAdjustment(
@@ -257,6 +269,7 @@ def create_stock_adjustment(transaction_type, tank_id, fish_type_id, quantity_be
                 quantity_after=target_quantity_after,
                 reason=reason,
                 notes=updated_notes_target,
+                recorded_by=get_performed_by(),
                 recorded_at=now
             )
         ]
@@ -275,6 +288,7 @@ def create_stock_adjustment(transaction_type, tank_id, fish_type_id, quantity_be
                 quantity_after=quantity_after,
                 reason=reason,
                 notes=notes,
+                recorded_by=get_performed_by(),
                 recorded_at=now
             )
         )
@@ -283,7 +297,7 @@ def create_stock_adjustment(transaction_type, tank_id, fish_type_id, quantity_be
 
 # --------------------- Stock Update ---------------------
 def update_tank_stock(tank_id, fish_type_id, quantity_change, transaction_type, target_tank_id=None):
-    now = datetime.utcnow()
+    now = db.func.current_timestamp()
 
     if transaction_type == "TRANSFER":
         if tank_id == target_tank_id:
@@ -369,13 +383,15 @@ def _handle_stock_take_creation():
             return api_response("There were errors with the fish items.", errors=errors, status_code=400)
 
         # Create StockTake
-        now = datetime.utcnow()
+        now = db.func.current_timestamp()
         stock_take = StockTake(
             site_id=tank.site_id,
             tank_id=tank_id,
             remarks=remarks,
             status=status,
+            initiate_by=get_performed_by(),
             initiate_at=now,
+            created_by=get_performed_by(),
             created_at=now,
         )
         db.session.add(stock_take)
@@ -422,7 +438,8 @@ def update_stock_take(stock_take_id):
 
         # Update main existing stock take
         stock_take.remarks = remarks
-        stock_take.updated_at = datetime.utcnow()
+        stock_take.updated_by = get_performed_by()
+        stock_take.updated_at = db.func.current_timestamp()
         stock_take.status = status
 
         # Delete existing items and re-add
@@ -515,7 +532,9 @@ def get_stock_take_and_validate(stock_take_id, valid_statuses, action):
 def update_stock_take_status(stock_take, status, review_comment):
     stock_take.status = status
     stock_take.review_comment = review_comment
-    stock_take.finalize_at = datetime.utcnow()
+    stock_take.updated_by = get_performed_by()
+    stock_take.finalize_by = get_performed_by()
+    stock_take.finalize_at = db.func.current_timestamp()
     db.session.commit()
 
 # Approve endpoint
@@ -557,7 +576,8 @@ def apply_stock_take_to_stock(stock_take, review_comment):
             continue
 
         # Format reason and notes with initiate_at
-        now_str = datetime.utcnow().strftime("%b %d, %Y %I:%M %p")
+        now = db.session.execute(db.func.current_timestamp()).scalar()
+        now_str = now.strftime("%b %d, %Y %I:%M %p") if now else "Unknown"
         init_str = stock_take.initiate_at.strftime("%b %d, %Y %I:%M %p") if stock_take.initiate_at else "Unknown"
 
         reason = f"Stock take adjustment (initiated on {init_str}, applied on {now_str})"
@@ -571,7 +591,9 @@ def apply_stock_take_to_stock(stock_take, review_comment):
             quantity_before=old_quantity,
             quantity_after=new_quantity,
             reason=reason,
-            notes=notes
+            notes=notes,
+            recorded_by=get_performed_by(),
+            recorded_at=now 
         )
         db.session.add(stock_adjustment)
         db.session.flush()
@@ -582,7 +604,7 @@ def apply_stock_take_to_stock(stock_take, review_comment):
         # Update or insert tank stock
         if tank_stock:
             tank_stock.quantity = new_quantity
-            tank_stock.last_updated = datetime.utcnow()
+            tank_stock.last_updated = db.func.current_timestamp()
         else:
             db.session.add(TankStock(
                 tank_id=item.tank_id,

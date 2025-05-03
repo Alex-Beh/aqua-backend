@@ -37,12 +37,16 @@ class StockTake(db.Model):
             "tank": self.tank.to_dict() if self.tank else None,
             "siteId": self.site_id,  # Include siteId in the response
             # "site": self.site.to_dict() if self.site else None,  # Include site details if needed
+            'initiateBy': self.initiate_by,
             "initiateAt": self.initiate_at.isoformat() if self.initiate_at else None,
+            'finalizeBy': self.finalize_by,
             "finalizeAt": self.finalize_at.isoformat() if self.finalize_at else None,
             "remarks": self.remarks,
             "reviewComment": self.review_comment,
             "status": self.status,
+            'createdBy': self.created_by,
             "createdAt": self.created_at.isoformat() if self.created_at else None,
+            'updatedBy': self.updated_by,
             "updatedAt": self.updated_at.isoformat() if self.updated_at else None,
         }
 

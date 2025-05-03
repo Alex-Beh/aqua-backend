@@ -16,7 +16,7 @@ from sqlalchemy import func
 stock_bp = Blueprint("stock_bp", __name__, url_prefix="/api/tank-stock")
 
 # # Apply login_required globally for all routes in this blueprint
-# @tanks_bp.before_request
+# @stock_bp.before_request
 # @login_required
 # def before_request():
 #     pass
