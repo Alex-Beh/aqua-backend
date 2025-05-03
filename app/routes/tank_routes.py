@@ -26,6 +26,12 @@ def _serialize(tank: Tank) -> dict:
 # ---------------------------------------------------------------------------
 tanks_bp = Blueprint("tanks_bp", __name__, url_prefix="/api/tanks")
 
+# # Apply login_required globally for all routes in this blueprint
+# @bp.before_request
+# @login_required
+# def before_request():
+#     pass
+
 # Get a paginated list of tanks (optionally filtered by status and siteId)
 @tanks_bp.route('/paging', methods=['GET'])
 def get_tanks_paged():
