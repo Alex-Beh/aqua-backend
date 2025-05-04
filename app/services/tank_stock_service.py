@@ -156,12 +156,12 @@ class TankStockService:
         """Fetches the distribution of tanks and fish types for each site."""
         query = db.session.query(
             Tank.site_id,
-            db.func.count(Tank.tank_id).label("tank_count"),
-            db.func.count(FishType.type_id).label("fish_type_count"),
+            db.func.count(db.func.distinct(Tank.tank_id)).label("tank_count"),
+            db.func.count(db.func.distinct(FishType.type_id)).label("fish_type_count"),
             db.func.sum(TankStock.quantity).label("total_fish_count")
         ).join(TankStock, TankStock.tank_id == Tank.tank_id, isouter=True) \
-         .join(FishType, TankStock.fish_type_id == FishType.type_id, isouter=True) \
-         .group_by(Tank.site_id)
+        .join(FishType, TankStock.fish_type_id == FishType.type_id, isouter=True) \
+        .group_by(Tank.site_id)
 
         if site_id and site_id > 0:
             query = query.filter(Tank.site_id == site_id)

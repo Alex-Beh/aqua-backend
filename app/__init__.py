@@ -62,4 +62,7 @@ def create_app():
     app.register_blueprint(route_routes.role_bp)
     app.register_blueprint(auth_routes.auth_bp)
 
+    from app.routes import dashboard_routes
+    app.register_blueprint(dashboard_routes.dashboard_bp)
+
     return app
