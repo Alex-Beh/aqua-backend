@@ -721,6 +721,72 @@ def get_stock_take(stock_take_id):
         "items": [item.to_dict() for item in stock_take.items]
     })
 
+@adjust_bp.route("/stock-take/paging", methods=["GET"])
+def list_stock_takes_paged():
+    # Pagination
+    page = request.args.get('page', 1, type=int)
+    size = request.args.get('size', 10, type=int)
+
+    # Sorting
+    sort_field = request.args.get("sortField", "initiate_at")
+    sort_order = request.args.get("sortOrder", "desc")
+
+    # Filters
+    site_id = request.args.get("siteId", type=int)
+    tank_id = request.args.get("tankId", type=int)
+    status_param = request.args.get("status", type=str)
+    since = request.args.get("since")
+    until = request.args.get("until")
+    search_text = request.args.get("searchText", "", type=str).strip().lower()
+
+    # Start building query
+    query = StockTake.query
+
+    # Filter by foreign keys
+    if site_id and site_id > 0:
+        query = query.filter(StockTake.site_id == site_id)
+    if tank_id and tank_id > 0:
+        query = query.filter(StockTake.tank_id == tank_id)
+    if status_param:
+        status_list = [s.strip().capitalize() for s in status_param.split(",")]
+        query = query.filter(StockTake.status.in_(status_list))
+    if since:
+        query = query.filter(StockTake.initiate_at >= since)
+    if until:
+        query = query.filter(StockTake.initiate_at <= until)
+
+    # Optional text search in fish type fields
+    if search_text:
+        search_pattern = f"%{search_text}%"
+        query = query.filter(
+            db.or_(
+                db.func.lower(StockTake.initiate_by).like(search_pattern),
+                db.func.lower(StockTake.finalize_by).like(search_pattern),
+                db.func.lower(Tank.tank_name).like(search_pattern),
+                db.func.lower(Tank.tank_code).like(search_pattern)
+            )
+        )
+
+    allowed_sort_fields = ["initiate_by", "initiate_at", "finalize_by", "finalize_at", "status"]
+    if sort_field not in allowed_sort_fields:
+        sort_field = "initiate_at"
+        
+    # Avoid duplicate results when joining
+    query = query.distinct()
+
+    # Perform pagination
+    paginated = paginate_response(
+        query=query,
+        page=page,
+        size=size,
+        model_class=StockTake,
+        sort_field=sort_field,
+        sort_order=sort_order
+    )
+
+    return api_response("Stock takes retrieved successfully", data=paginated)
+
+
 @adjust_bp.route("/stock-take", methods=["GET"])
 def list_stock_takes():
     """
