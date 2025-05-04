@@ -169,7 +169,7 @@ class TankStockService:
         return query.all()
     
     @staticmethod
-    def build_tank_details(tank_id, total_quantity, tank_obj):
+    def build_tank_details(tank_id, total_quantity, tank_obj, include_fish_details: bool = True):
         fish_quantities = db.session.query(
             TankStock.fish_type_id,
             db.func.sum(TankStock.quantity).label("fish_total_quantity")
@@ -177,31 +177,41 @@ class TankStockService:
          .group_by(TankStock.fish_type_id) \
          .join(FishType).all()
 
+        fish_type_count = len(fish_quantities)
+
         fish_details = []
-        for fish_type_id, fish_total_quantity in fish_quantities:
-            fish_type = FishType.query.get(fish_type_id)
-            if fish_type:
-                fish_details.append({
-                    "fishTypeId": fish_type_id,
-                    "commonName": fish_type.common_name,
-                    "scientificName": fish_type.scientific_name,
-                    "fishTotalQuantity": fish_total_quantity,
-                    "createdAt": fish_type.created_at.isoformat() if fish_type.created_at else None,
-                    "updatedAt": fish_type.updated_at.isoformat() if fish_type.updated_at else None,
-                })
+        if include_fish_details:
+            for fish_type_id, fish_total_quantity in fish_quantities:
+                fish_type = FishType.query.get(fish_type_id)
+                if fish_type:
+                    fish_details.append({
+                        "fishTypeId": fish_type_id,
+                        "commonName": fish_type.common_name,
+                        "scientificName": fish_type.scientific_name,
+                        "fishTotalQuantity": fish_total_quantity,
+                        "createdAt": fish_type.created_at.isoformat() if fish_type.created_at else None,
+                        "updatedAt": fish_type.updated_at.isoformat() if fish_type.updated_at else None,
+                    })
 
         capacity = max(tank_obj.capacity or 0, 1)
         filled_percentage = round((total_quantity / capacity) * 100, 2)
 
+        site = tank_obj.site
+
         return {
             "tankId": tank_obj.tank_id,
             "tankName": tank_obj.tank_name,
+            "tankCode": tank_obj.tank_code,
             "status": tank_obj.status,
+            "size": tank_obj.size,
             "totalTankCapacity": capacity,
             "totalFishCount": total_quantity,
             "tankFilledPercentage": filled_percentage,
-            "fishTypeCount": len(fish_details),
-            "fishDetails": fish_details
+            "fishTypeCount": fish_type_count,
+            "fishDetails": fish_details,
+            "siteId": site.site_id if site else None,
+            "siteName": site.site_name if site else None,
+            "siteCode": site.site_code if site else None,
         }
     
     @staticmethod

@@ -47,7 +47,7 @@ def get_top_tanks_by_quantity():
     for tank_id, total_quantity in top_tanks:
         tank = Tank.query.get(tank_id)
         if tank:
-            result.append(TankStockService.build_tank_details(tank_id, total_quantity, tank))
+            result.append(TankStockService.build_tank_details(tank_id, total_quantity, tank, include_fish_details=False))
 
     return api_response("Top tanks by fish inventory", data=result)
 
