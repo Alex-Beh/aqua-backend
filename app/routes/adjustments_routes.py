@@ -14,6 +14,7 @@ from app.models.stock_take_item import StockTakeItem
 from app.utils import api_response, validate_json, paginate_response
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from sqlalchemy.orm import joinedload
+from sqlalchemy import or_
 
 # ---------------------------------------------------------------------------
 # Stock‑adjustment endpoints ------------------------------------------------
@@ -62,6 +63,58 @@ def list_adjustments():
     rows = q.order_by(StockAdjustment.transaction_date.desc()).limit(100).all() if not since and not until else q.order_by(StockAdjustment.transaction_date.desc()).all()
     
     return api_response("Stock adjustments retrieved successfully", data=[adj.to_dict() for adj in rows])
+
+@adjust_bp.route("/paging", methods=["GET"])
+def list_adjustments_paged():
+    # Pagination
+    page = request.args.get('page', 1, type=int)
+    size = request.args.get('size', 10, type=int)
+
+    # Sorting
+    sort_field = request.args.get("sortField", "transaction_date")
+    sort_order = request.args.get("sortOrder", "desc")
+
+    # Filters
+    tank_id = request.args.get("tankId", type=int)
+    fish_type_id = request.args.get("fishTypeId", type=int)
+    transaction_type = request.args.get("transactionType", type=str)
+    since = request.args.get("since")  # ISO date string
+    until = request.args.get("until")  # ISO date string
+    search_text = request.args.get("searchText", "", type=str).strip()
+
+    query = StockAdjustment.query.join(FishType, StockAdjustment.fish_type_id == FishType.type_id)
+
+    if tank_id and tank_id > 0:
+        query = query.filter(StockAdjustment.tank_id == tank_id)
+    if fish_type_id and fish_type_id > 0:
+        query = query.filter(StockAdjustment.fish_type_id == fish_type_id)
+    if transaction_type:
+        query = query.filter(StockAdjustment.transaction_type == transaction_type)
+    if since:
+        query = query.filter(StockAdjustment.transaction_date >= since)
+    if until:
+        query = query.filter(StockAdjustment.transaction_date <= until)
+
+    if search_text:
+        search_lower = f"%{search_text.lower()}%"
+        query = query.filter(
+            or_(
+                db.func.lower(FishType.common_name).like(search_lower),
+                db.func.lower(FishType.type_code).like(search_lower),
+                db.func.lower(FishType.scientific_name).like(search_lower),
+            )
+        )
+
+    paginated = paginate_response(
+        query=query,
+        page=page,
+        size=size,
+        model_class=StockAdjustment,
+        sort_field=sort_field,
+        sort_order=sort_order,
+    )
+
+    return api_response("Stock adjustments retrieved successfully", data=paginated)
 
 @adjust_bp.route("/<int:adjustment_id>", methods=["GET"])
 def get_adjustment(adjustment_id):
