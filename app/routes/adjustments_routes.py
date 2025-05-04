@@ -442,6 +442,11 @@ def update_stock_take(stock_take_id):
         stock_take.updated_at = db.func.current_timestamp()
         stock_take.status = status
 
+        current_user = get_performed_by()
+        if stock_take.initiate_by != current_user:
+            stock_take.initiate_by = current_user
+            stock_take.initiate_at = db.func.current_timestamp()
+
         # Delete existing items and re-add
         StockTakeItem.query.filter_by(stock_take_id=stock_take_id).delete()
 

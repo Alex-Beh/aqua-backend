@@ -1,3 +1,4 @@
+import math
 from flask import Blueprint, request
 from sqlalchemy import or_, cast, String, desc
 from app.models import TankStock, StockAdjustment
@@ -283,6 +284,7 @@ def fish_inventory_paged():
     query = query.order_by(sort_column.desc() if sort_order == "desc" else sort_column)
 
     total_count = query.count()
+    total_pages = math.ceil(total_count / size) if size > 0 else 0
     items = query.offset((page - 1) * size).limit(size).all()
 
     result = [
@@ -300,6 +302,7 @@ def fish_inventory_paged():
         "Fish Inventory retrieved successfully",
         data={
             "total": total_count,
+            "totalPages": total_pages,
             "page": page,
             "size": size,
             "items": result

@@ -1,5 +1,8 @@
 # app/utils/pagination.py
 
+import math
+
+
 def paginate_response(query, page, size, model_class, sort_field=None, sort_order='asc'):
     """
     Paginates the query result and supports sorting.
@@ -22,10 +25,12 @@ def paginate_response(query, page, size, model_class, sort_field=None, sort_orde
                 query = query.order_by(sort_func)
 
     total = query.count()
+    total_pages = math.ceil(total / size) if size > 0 else 0
     items = query.offset((page - 1) * size).limit(size).all()
 
     return {
         'total': total,
+        'totalPages': total_pages,
         'page': page,
         'size': size,
         'items': [item.to_dict() for item in items]  # Assuming `to_dict()` method is available on model class
