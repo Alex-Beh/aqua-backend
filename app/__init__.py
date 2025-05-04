@@ -65,4 +65,7 @@ def create_app():
     from app.routes import dashboard_routes
     app.register_blueprint(dashboard_routes.dashboard_bp)
 
+    from app.routes.redirect import bp as redirect_bp
+    app.register_blueprint(redirect_bp)
+
     return app
