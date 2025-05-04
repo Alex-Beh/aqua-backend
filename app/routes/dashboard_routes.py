@@ -94,3 +94,32 @@ def get_site_distribution():
             })
 
     return api_response("Site Distribution Summary retrieved successfully", data=result)
+
+@dashboard_bp.route("/top-by-fish-inventory", methods=["GET"])
+def top_by_fish_inventory():
+    site_id = request.args.get("siteId", type=int)
+    tank_id = request.args.get("tankId", type=int)
+    fish_type_id = request.args.get("fishTypeId", type=int)
+    search_text = request.args.get("searchText", type=str)
+    limit = request.args.get("limit", type=int, default=5)
+
+    if not limit or limit < 5:
+        limit = 5
+
+    query = TankStockService.build_fish_inventory_query(site_id, tank_id, fish_type_id, search_text)
+    query = query.order_by(db.desc("total_stock")).limit(limit)
+
+    top_fish = query.all()
+
+    result = [
+        {
+            "typeId": fish[0],
+            "commonName": fish[1],
+            "typeCode": fish[2],
+            "scientificName": fish[3],
+            "totalTankCount": fish[4],
+            "totalFishCount": fish[5]
+        } for fish in top_fish
+    ]
+
+    return api_response("Top Fish Inventory retrieved successfully", data=result)
