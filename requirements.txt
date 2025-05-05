@@ -7,3 +7,4 @@ Flask-SQLAlchemy
 Flask-Migrate
 Flask-Login
 python-dotenv
+gunicorn
