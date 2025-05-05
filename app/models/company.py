@@ -34,5 +34,11 @@ class Company(db.Model):
             'deletedAt': self.deleted_at.isoformat() if self.deleted_at else None,
         }
     
+    @staticmethod
+    def validate_fields(data, for_update=False):
+        errors = {}
+
+        return errors if errors else None
+
     def __repr__(self):
         return f"<Company {self.company_code}>"

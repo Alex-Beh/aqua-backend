@@ -20,7 +20,13 @@ def create_app():
     # app.config.from_object("app.config.Config")
 
     # Now use the environment variables
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
+    # app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
+    app.config['SQLALCHEMY_DATABASE_URI'] = (
+        f"postgresql://{os.getenv('user')}:{os.getenv('password')}"
+        f"@{os.getenv('host')}:{os.getenv('port')}/{os.getenv('dbname')}"
+    ) 
+    print(f"URL: {app.config['SQLALCHEMY_DATABASE_URI']}")
+
     app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER')
     app.config['MAX_CONTENT_LENGTH'] = int(os.getenv('MAX_CONTENT_LENGTH', 5242880))  # default to 5MB if not set
     app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'default_secret_key')
