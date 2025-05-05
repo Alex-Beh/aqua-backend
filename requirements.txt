@@ -1,3 +1,9 @@
 fastapi
 uvicorn[standard]
 psycopg2-binary  # If using PostgreSQL (e.g., with Supabase)
+Flask
+Flask-Cors
+Flask-SQLAlchemy
+Flask-Migrate
+Flask-Login
+python-dotenv
