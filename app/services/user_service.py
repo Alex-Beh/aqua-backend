@@ -31,6 +31,12 @@ def validate_and_create_user(data, performed_by=None):
     if validation_errors:
         return None, validation_errors
 
+    ## TODO(06 May): We gave the user different signup code for different roleId, for staffId, we can assign the same value from username
+    # Validate the signup code
+    expected_signup_code = "ABC123"
+    if data.get("signupCode") != expected_signup_code:
+        return None, ["Invalid signup code"]
+
     try:
         new_user = create_user(
             username=data['username'],
@@ -81,14 +87,14 @@ def validate_user_data(data, for_update=False):
     #     errors['password'] = "Password must contain at least one letter"
 
     # Validate role_id
-    role_id = data.get('roleId')
-    if role_id is None or role_id <= 0:
-        errors['roleId'] = "Role is required"
-    else:
-        from app.models.role import Role  # lazy import to avoid circular import
-        role = Role.query.filter_by(role_id=role_id).first()
-        if not role:
-            errors['roleId'] = "Invalid Role provided"
+    # role_id = data.get('roleId')
+    # if role_id is None or role_id <= 0:
+    #     errors['roleId'] = "Role is required"
+    # else:
+    #     from app.models.role import Role  # lazy import to avoid circular import
+    #     role = Role.query.filter_by(role_id=role_id).first()
+    #     if not role:
+    #         errors['roleId'] = "Invalid Role provided"
 
     # Optionally validate emailid format if provided
     emailid = data.get('emailid')

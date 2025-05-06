@@ -10,3 +10,4 @@ with app.app_context():
 # # Run the server
 # if __name__ == '__main__':
 #     app.run(host="0.0.0.0", port=5000, debug=True)
+print("Exited, if it is not intentional, please uncomment the last two lines to test locally")

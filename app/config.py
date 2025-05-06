@@ -1,5 +1,6 @@
 import os
 
+## TODO(06 May): can be removed?
 class Config:
     SQLALCHEMY_DATABASE_URI = "postgresql://username:password@localhost:5432/aquastock"
     UPLOAD_FOLDER = "uploads/fish_images"

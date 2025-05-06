@@ -9,7 +9,19 @@ sudo apt install postgresql postgresql-contrib
 
 pip install Flask Flask-Cors Flask-SQLAlchemy psycopg2-binary
 ```
-
+## Project layout
+```
+aqua-backend/
+└── app/
+    ├── api_tests/      # Contains test cases for your API endpoints (likely using pytest or unittest)
+    ├── config.py       # Holds environment-specific settings (e.g., DB URI, secret keys)
+    ├── decorators/     # Custom route or function decorators (e.g., auth checks, logging)
+    ├── __init__.py     # Initializes the Flask app and extensions (entry point for the app package)
+    ├── models/         # SQLAlchemy ORM models defining your database schema
+    ├── routes/         # Blueprint-based route definitions (API endpoints live here)
+    ├── services/       # Business logic, usually called from routes (e.g., stock adjustments, tank management)
+    └── utils/          # Helper functions (e.g., api_response, validate_json, etc.)
+```
 ## 🛠️ Setup Instructions
 1. Setup PostgreSQL
     ```
