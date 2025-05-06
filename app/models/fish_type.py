@@ -18,6 +18,8 @@ class FishType(db.Model):
     scientific_name = db.Column(db.String(100))
     size = db.Column(db.Enum(FishSize), nullable=True)
     image_url = db.Column(db.String(255))
+    image_data = db.Column(db.LargeBinary)
+    image_mime_type = db.Column(db.String(50))
     created_by = db.Column(db.String(100))
     created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
     updated_by = db.Column(db.String(100))

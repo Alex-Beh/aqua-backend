@@ -47,20 +47,22 @@ class FishTypeService:
         if 'size' in data and data['size']:
             size = FishSize(data['size'])
 
-        # Handle image
-        image_url = None
+        # Handle image and store as binary data
+        image_data = None
+        image_mime_type = None
         if image_file and FishTypeService.allowed_file(image_file.filename):
-            filename = secure_filename(image_file.filename)
-            filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{filename}"
-            image_file.save(os.path.join(upload_folder, filename))
-            image_url = f"/uploads/fish_images/{filename}"
+            image_data = image_file.read()
+            image_mime_type = image_file.mimetype
 
+        type_code_ = FishTypeService.generate_type_code()
         new_fish_type = FishType(
-            type_code=FishTypeService.generate_type_code(),
+            type_code=type_code_,
             common_name=data.get('commonName'),
             scientific_name=data.get('scientificName'),
             size=size,
-            image_url=image_url,
+            image_url=f"/uploads/fish_images/{type_code_}",
+            image_data=image_data,
+            image_mime_type=image_mime_type,
             is_active=data.get('isActive', 'true').lower() == 'true',
             created_at=db.func.current_timestamp(),
             created_by=performed_by

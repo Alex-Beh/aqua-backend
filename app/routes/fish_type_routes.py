@@ -1,4 +1,5 @@
-from flask import Blueprint, request, jsonify, send_from_directory, current_app
+import io
+from flask import Blueprint, request, jsonify, send_from_directory, current_app, send_file, abort
 from flask_login import current_user, login_required
 from app.models import FishType
 from app import db
@@ -24,19 +25,12 @@ static_bs = Blueprint('static_files', __name__)
 def get_performed_by():
     return current_user.name if current_user.is_authenticated else "Anonymous"
 
-@static_bs.route('/uploads/fish_images/<filename>')
-def serve_fish_image(filename):
-    
-
-    print(f"Serving file: {filename}")
-    if os.path.exists(os.path.join(current_app.config['UPLOAD_FOLDER'], filename)):
-        print("File exists")
-    else: 
-        print("File does not exist")
-
-    upload_folder = os.path.abspath(current_app.config['UPLOAD_FOLDER'])  # Absolute path
-
-    return send_from_directory(upload_folder, filename)
+@static_bs.route('/uploads/fish_images/<type_code>')
+def serve_fish_image(type_code):
+    fish = FishType.query.filter(FishType.type_code == type_code).first()
+    if not fish.image_data:
+        abort(404)
+    return send_file(io.BytesIO(fish.image_data), mimetype=fish.image_mime_type)
 
 bp = Blueprint('fish_types', __name__, url_prefix='/api/fish-types')
 
