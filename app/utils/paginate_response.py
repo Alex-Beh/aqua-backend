@@ -3,7 +3,7 @@
 import math
 
 
-def paginate_response(query, page, size, model_class, sort_field=None, sort_order='asc'):
+def paginate_response(query, page, size, model_class, sort_field=None, sort_order='asc', include_image_data=False):
     """
     Paginates the query result and supports sorting.
     :param query: SQLAlchemy query object
@@ -33,5 +33,5 @@ def paginate_response(query, page, size, model_class, sort_field=None, sort_orde
         'totalPages': total_pages,
         'page': page,
         'size': size,
-        'items': [item.to_dict() for item in items]  # Assuming `to_dict()` method is available on model class
+        'items': [item.to_dict(include_image_data=include_image_data) for item in items]  # Assuming `to_dict()` method is available on model class
     }

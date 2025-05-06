@@ -7,12 +7,12 @@ class Role(db.Model):
     role_name = db.Column(db.String(50), unique=True, nullable=False)
     description = db.Column(db.Text)
 
-    # Optional: relationship to AppUser
-    users = db.relationship('AppUser', backref='role', lazy=True)
+    # # Optional: relationship to AppUser
+    # users = db.relationship('AppUser', backref='user_role', lazy=True)
 
     def __repr__(self):
-        return f"<Role {self.name}>"
-    
+        return f"<Role {self.role_name}>"
+
     def to_dict(self):
         return {
             "role_id": self.role_id,

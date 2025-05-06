@@ -27,6 +27,8 @@ class AppUser(db.Model, UserMixin):
     deleted_by = db.Column(db.String(100))
     deleted_at = db.Column(db.DateTime)
 
+    role = db.relationship("Role", backref="users", lazy=True)
+
     # Flask-Login compatibility
     @property
     def id(self):
@@ -65,4 +67,14 @@ class AppUser(db.Model, UserMixin):
             'updated_at': self.updated_at,
             'deleted_by': self.deleted_by,
             'deleted_at': self.deleted_at,
+        }
+    
+    def to_safe_dict(self):
+        return {
+            "user_id": self.user_id,
+            "staff_id": self.staff_id,
+            "username": self.username,
+            "name": self.name,
+            "role": self.role.role_name if self.role else None,
+            "role_id": self.role_id 
         }

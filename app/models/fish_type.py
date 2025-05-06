@@ -1,3 +1,4 @@
+import base64
 from app import db
 from datetime import datetime
 import enum
@@ -31,7 +32,7 @@ class FishType(db.Model):
     # Relationships
     stocks = db.relationship("TankStock", back_populates="fish_type", cascade="all, delete-orphan")
 
-    def to_dict(self, include_inactive=False):
+    def to_dict(self, include_inactive=False, include_image_data=False):
         data = {
             'typeId': self.type_id,
             'typeCode': self.type_code,
@@ -50,6 +51,12 @@ class FishType(db.Model):
         
         if not include_inactive and not self.is_active:
             return None  # Exclude inactive fish types
+        
+        # Conditionally include base64 image data
+        if include_image_data and self.image_data:
+            data['imageData'] = base64.b64encode(self.image_data).decode('utf-8')
+            data['imageMimeType'] = self.image_mime_type
+            
         return data
 
     

@@ -22,7 +22,7 @@ class FishTypeService:
     @staticmethod
     def get_paginated(page, size, status=None, sort_field='type_code', sort_order='asc'):
         query = FishTypeService.base_query(status)
-        return paginate_response(query, page, size, FishType, sort_field, sort_order)
+        return paginate_response(query, page, size, FishType, sort_field, sort_order, include_image_data=True)
 
     @staticmethod
     def get_all(status=None):

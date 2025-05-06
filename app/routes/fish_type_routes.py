@@ -54,7 +54,7 @@ def get_fish_types_paged():
 def get_all_fish_types():
     status = request.args.get('status')
     fish_types = FishTypeService.get_all(status=status)
-    return api_response("Fish types retrieved", data=[ft.to_dict() for ft in fish_types])
+    return api_response("Fish types retrieved", data=[ft.to_dict(include_image_data=True) for ft in fish_types])
 
 # GET /api/fish-types/<int:type_id>
 @bp.route('/<int:type_id>', methods=['GET'])
@@ -62,7 +62,7 @@ def get_fish_type(type_id):
     fish_type = FishTypeService.get_by_id(type_id)
     if not fish_type or fish_type.deleted_at:
         return api_response("Fish type not found", status_code=404)
-    return api_response("Fish type retrieved", data=fish_type.to_dict())
+    return api_response("Fish type retrieved", data=fish_type.to_dict(include_image_data=True))
 
 # POST /api/fish-types
 @bp.route('', methods=['POST'])
