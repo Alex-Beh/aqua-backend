@@ -26,7 +26,7 @@ def create_app():
         f"postgresql://{os.getenv('user')}:{os.getenv('password')}"
         f"@{os.getenv('host')}:{os.getenv('port')}/{os.getenv('dbname')}"
     ) 
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
+    # app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
     print(f"URL: {app.config['SQLALCHEMY_DATABASE_URI']}")
 
     app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER')
