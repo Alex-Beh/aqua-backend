@@ -513,6 +513,27 @@ def update_stock_take(stock_take_id):
         db.session.rollback()
         return api_response("Unexpected DB error", errors=str(e), status_code=500)
 
+@adjust_bp.route("/stock-take/create-and-approve", methods=["POST"])
+def quick_create_and_approve_stock_take():
+    data = request.get_json(force=True)
+
+    # Reuse the creation logic (call the internal method)
+    create_response, status_code = _handle_stock_take_creation()
+    if status_code != 201:
+        return create_response, status_code
+
+    stock_take_id = create_response.get_json().get("data", {}).get("stockTakeId")
+    if not stock_take_id:
+        return api_response("Failed to retrieve new stock take ID", status_code=500)
+
+    # Now immediately approve it
+    review_comment = data.get("reviewComment", "Auto-approved")
+    try:
+        approve_stock_take_logic(stock_take_id, review_comment)
+        return api_response("Stock take created and approved successfully", data={"stockTakeId": stock_take_id})
+    except Exception as e:
+        return api_response("Stock take created but approval failed", errors=str(e), status_code=500)
+
 def get_tank_stock_list(tank_id=None, fish_type_id=None, site_id=None):
     q = TankStock.query.options(
         joinedload(TankStock.tank),
@@ -602,21 +623,28 @@ def approve_stock_take(stock_take_id):
     review_comment = data.get("reviewComment")
 
     try:
-        stock_take = get_stock_take_and_validate(stock_take_id, ["Pending"], "approve")
-
-        # ✅ Apply changes to stock + log adjustments
-        apply_stock_take_to_stock(stock_take, review_comment)
-
-        # ✅ Then update status to 'Approved'
-        update_stock_take_status(stock_take, "Approved", review_comment)
-
+        approve_stock_take_logic(stock_take_id, review_comment)
         return api_response("Stock take approved successfully")
-
     except ValueError as e:
-        return api_response(str(e), status_code=400)  # Handle validation error
+        return api_response(str(e), status_code=400)
     except SQLAlchemyError as e:
         db.session.rollback()
         return api_response("Unexpected DB error", errors=str(e), status_code=500)
+
+def approve_stock_take_logic(stock_take_id: int, review_comment: str = None):
+    """
+    Core logic for approving a stock take. Can be reused in tests or other routes.
+    Raises ValueError or SQLAlchemyError as needed.
+    """
+    stock_take = get_stock_take_and_validate(stock_take_id, ["Pending"], "approve")
+
+    # Apply changes to stock + log adjustments
+    apply_stock_take_to_stock(stock_take, review_comment)
+
+    # Update status to 'Approved'
+    update_stock_take_status(stock_take, "Approved", review_comment)
+
+    return stock_take
 
 def apply_stock_take_to_stock(stock_take, review_comment):
     for item in stock_take.items:
