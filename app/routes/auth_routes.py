@@ -22,7 +22,10 @@ def login():
         return api_response(error, status_code=401) 
 
     login_user(user)
-    return api_response("Logged in successfully", status_code=200)
+    
+    ## TODO: need to convert the role_id and represent it as a string, then return it
+    return api_response(
+        "Logged in successfully", data={"role": user.staff_id}, status_code=200)
 
 @auth_bp.route('/logout', methods=['POST'])
 @login_required
