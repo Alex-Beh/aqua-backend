@@ -1,6 +1,6 @@
 import os
 
-## TODO(06 May): can be removed?
+## TODO(06 May): can be removed?  (CX: if removed, local DB cannot find right)
 class Config:
     SQLALCHEMY_DATABASE_URI = "postgresql://username:password@localhost:5432/aquastock"
     UPLOAD_FOLDER = "uploads/fish_images"

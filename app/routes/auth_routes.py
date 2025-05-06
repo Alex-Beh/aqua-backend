@@ -6,6 +6,7 @@ from app.models.role import Role
 from app.services.auth_service import authenticate_user
 from app.services.user_service import validate_and_create_user
 from app.utils import api_response
+from app.decorators.roles import admin_required
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
 
@@ -32,6 +33,8 @@ def logout():
     return api_response("Logged out successfully", status_code=200)
 
 @auth_bp.route('/register', methods=['POST'])
+# @login_required
+# @admin_required
 def register():
     data = request.get_json()
 

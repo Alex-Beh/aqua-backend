@@ -18,9 +18,6 @@ def create_app():
 
     app = Flask(__name__)
 
-    ## TODO(06 May): can be removed?
-    # app.config.from_object("app.config.Config")
-
     # Now use the environment variables
     app.config['SQLALCHEMY_DATABASE_URI'] = (
         f"postgresql://{os.getenv('user')}:{os.getenv('password')}"
