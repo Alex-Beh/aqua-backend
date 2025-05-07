@@ -1,5 +1,3 @@
-# app/utils/validators.py
-
 from flask import request
 
 def validate_json(required_fields=None):

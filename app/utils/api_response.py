@@ -1,5 +1,3 @@
-# /app/utils/api_response.py
-
 from flask import jsonify
 
 def api_response(

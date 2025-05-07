@@ -1,7 +1,4 @@
-# app/utils/pagination.py
-
 import math
-
 
 def paginate_response(query, page, size, model_class, sort_field=None, sort_order='asc', include_image_data=False):
     """
