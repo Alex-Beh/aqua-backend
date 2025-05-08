@@ -2,7 +2,11 @@ from flask_cors import CORS
 from app import create_app, db
 
 app = create_app()
-CORS(app)
+# When initializing the app:
+CORS(app, origins=[
+    "https://aqua.permai-kencana.com",
+    # "http://localhost:5173",            # optional: local dev
+])
 
 with app.app_context():
     db.create_all()  # Create tables if they don't exist
