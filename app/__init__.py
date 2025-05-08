@@ -70,7 +70,8 @@ def create_app():
     from app.routes import dashboard_routes
     app.register_blueprint(dashboard_routes.dashboard_bp)
 
-    from app.routes.redirect import bp as redirect_bp
+    from app.routes.redirect import bp as redirect_bp, public_qr_tank
     app.register_blueprint(redirect_bp)
+    app.register_blueprint(public_qr_tank)
 
     return app
