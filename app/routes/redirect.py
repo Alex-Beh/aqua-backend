@@ -33,7 +33,7 @@ def get_public_tank_details(tank_code):
             "type_code": "GUPPY-RED",
             "common_name": "Leopard snake skin",
             "scientific_name": "Poecilia reticulata",
-            "image_url": "https://aqua-backend-xdbk.onrender.com/uploads/fish_images/FISH-0002"
+            "image_url": "https://aqua-backend-1.onrender.com/uploads/fish_images/FISH-0002"
         },
         "same_fish_tanks": [
             {"tank_code": "tank-02", "name": "Tank 02"},
