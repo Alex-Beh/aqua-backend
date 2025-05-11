@@ -32,6 +32,14 @@ class TankStock(db.Model):
             "fishType": self.fish_type.to_dict() if self.fish_type else None,  # Include nested fish_type details
         }
 
+    def to_dict_QR_Purpose(self):
+        return {
+            "tankId": self.tank_id,
+            "fishTypeId": self.fish_type_id,
+            "quantity": self.quantity,
+            "lastUpdated": self.last_updated.isoformat() if self.last_updated else None,
+            "fishType": self.fish_type.to_dict() if self.fish_type else None,  # Include nested fish_type details
+        }
 ############################
 # AUTOMATIC SYNC LOGIC
 ############################
