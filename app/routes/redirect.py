@@ -5,6 +5,7 @@ from app.services.tank_stock_service import TankStockService
 from app.utils import api_response
 from app.models import Tank, TankStock, FishType
 from app.utils import api_response
+from sqlalchemy import func
 
 bp = Blueprint("redirect", __name__, url_prefix="/r")
 
@@ -19,13 +20,12 @@ def get_redirect_url(code: str):
 
 public_qr_tank = Blueprint("public_tank", __name__, url_prefix="/api/public")
 
-@public_qr_tank.route("/tank/<string:tank_code>", methods=["GET"])
-def get_public_tank_details(tank_code):
+@public_qr_tank.route("/tank/<string:tank_name>", methods=["GET"])
+def get_public_tank_details(tank_name):
     """Return tank and fish info for public QR view"""
-
-    tank = Tank.query.filter_by(tank_code=tank_code).first()
+    tank = Tank.query.filter(func.lower(Tank.tank_name) == tank_name.lower()).first()
     if not tank:
-        return api_response(f"Tank with code '{tank_code}' not found", status_code=404)
+        return api_response(f"Tank with code '{tank_name}' not found", status_code=404)
 
     stock_list = TankStockService.get_all_tank_stock(tank_id=tank.tank_id).all()
 
@@ -61,38 +61,3 @@ def get_public_tank_details(tank_code):
     }
 
     return api_response("Public QR Tank retrieved successfully", data=response_data)
-
-
-# @public_qr_tank.route("/tank/<string:tank_code>", methods=["GET"])
-# def get_public_tank_details(tank_code):
-#     """Return tank and fish details for public QR view"""
-#     tank = Tank.query.filter_by(tank_code=tank_code).first()
-#     if not tank:
-#         return api_response("Tank not found", status_code=404)
-
-#     tank_stock = TankStock.query.filter_by(tank_id=tank.tank_id).first()
-#     fish = FishType.query.get(tank_stock.type_id) if tank_stock else None
-
-#     same_fish_tanks = []
-#     if fish:
-#         same_fish_tanks = (
-#             db.session.query(Tank)
-#             .join(TankStock, Tank.tank_id == TankStock.tank_id)
-#             .filter(
-#                 TankStock.type_id == fish.type_id,
-#                 Tank.tank_code != tank_code
-#             )
-#             .all()
-#         )
-
-#     return api_response(data={
-#         "tank": {
-#             "tank_code": tank.tank_code,
-#             "name": tank.name,
-#             "description": tank.description,
-#         },
-#         "fish": fish.to_dict() if fish else None,
-#         "same_fish_tanks": [
-#             {"tank_code": t.tank_code, "name": t.name} for t in same_fish_tanks
-#         ]
-#     })
