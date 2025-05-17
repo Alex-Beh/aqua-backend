@@ -11,6 +11,7 @@ from datetime import datetime
 
 from flask_login import current_user, login_required
 from app.models.site import Site
+from app.models.tank_stock import TankStock
 from app.services.tank_service import TankService
 from app.utils import api_response, validate_json, paginate_response
 
@@ -53,8 +54,27 @@ def get_tanks_paged():
 def get_all_tanks():
     status_filter = request.args.get('status')
     site_id_filter = request.args.get('siteId', type=int)
+    include_fish_count = request.args.get('includeFishCount', 'false').lower() == 'true'
 
     tanks = TankService.get_all(status_filter, site_id_filter)
+
+    if include_fish_count:
+        # Query all tank stocks in one go to avoid N+1 queries
+        from sqlalchemy import func
+        fish_counts = dict(
+            db.session.query(
+                TankStock.tank_id,
+                func.sum(TankStock.quantity)
+            ).group_by(TankStock.tank_id).all()
+        )
+
+        result = []
+        for tank in tanks:
+            tank_data = tank.to_dict()
+            tank_data['totalFishCount'] = fish_counts.get(tank.tank_id, 0)
+            result.append(tank_data)
+
+        return api_response("Tanks retrieved with fish counts", data=result)
 
     return api_response("Tanks retrieved successfully", data=[tank.to_dict() for tank in tanks])
 

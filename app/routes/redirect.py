@@ -46,7 +46,11 @@ def get_public_tank_details(tank_name):
                 "quantity": s.quantity
             }
             for s in same_fish_stocks
-            if s.tank_id != tank.tank_id and (s.tank.status or "").lower() == "active"
+            if (
+                s.tank_id != tank.tank_id and
+                (s.tank.status or "").lower() == "active" and
+                s.quantity > 0
+            )        
         ]
 
         fish_info_list.append({
