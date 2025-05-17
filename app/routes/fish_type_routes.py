@@ -56,6 +56,13 @@ def get_all_fish_types():
     fish_types = FishTypeService.get_all(status=status)
     return api_response("Fish types retrieved", data=[ft.to_dict(include_image_data=True) for ft in fish_types])
 
+# GET Dropdown /api/fish-types
+@bp.route('/dropdown', methods=['GET'])
+def get_all_fish_types_dropdwon():
+    status = request.args.get('status')
+    fish_types = FishTypeService.get_all(status=status)
+    return api_response("Fish types retrieved", data=[ft.to_dict_dropdown() for ft in fish_types])
+
 # GET /api/fish-types/<int:type_id>
 @bp.route('/<int:type_id>', methods=['GET'])
 def get_fish_type(type_id):

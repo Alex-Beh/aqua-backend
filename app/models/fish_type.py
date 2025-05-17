@@ -55,3 +55,30 @@ class FishType(db.Model):
             data['imageMimeType'] = self.image_mime_type
             
         return data
+    
+    def to_dict_QR_Purpose(self, include_image_data=False):
+        data = {
+            'typeId': self.type_id,
+            'typeCode': self.type_code,
+            'commonName': self.common_name,
+            'scientificName': self.scientific_name,
+            'size': self.size.value if self.size else None,
+            'imageUrl': self.image_url 
+        }
+
+        # Conditionally include base64 image data
+        if include_image_data and self.image_data:
+            data['imageData'] = base64.b64encode(self.image_data).decode('utf-8')
+            data['imageMimeType'] = self.image_mime_type
+            
+        return data
+    
+    def to_dict_dropdown(self):
+        data = {
+            'typeId': self.type_id,
+            'typeCode': self.type_code,
+            'commonName': self.common_name,
+            'scientificName': self.scientific_name
+        }
+
+        return data

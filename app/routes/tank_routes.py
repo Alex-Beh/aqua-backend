@@ -58,6 +58,15 @@ def get_all_tanks():
 
     return api_response("Tanks retrieved successfully", data=[tank.to_dict() for tank in tanks])
 
+@tanks_bp.route('/dropdown', methods=['GET'])
+def get_all_tanks_dropdown():
+    status_filter = request.args.get('status')
+    site_id_filter = request.args.get('siteId', type=int)
+
+    tanks = TankService.get_all(status_filter, site_id_filter)
+
+    return api_response("Tanks retrieved successfully", data=[tank.to_dict_dropdown() for tank in tanks])
+
 @tanks_bp.route('/<int:tank_id>', methods=['GET'])
 def get_tank(tank_id):
     tank = TankService.get_by_id(tank_id)

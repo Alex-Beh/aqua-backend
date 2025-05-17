@@ -50,3 +50,18 @@ class Tank(db.Model):
             'updatedBy': self.updated_by,
             'deletedBy': self.deleted_by
         }
+    
+    def to_dict_QR_Purpose(self):
+        return {
+            'tankId': self.tank_id,
+            'tankName': self.tank_name,
+            'tankCode': self.tank_code,
+            'size': self.size if self.size else None,
+        }
+    
+    def to_dict_dropdown(self):
+        return {
+            'tankId': self.tank_id,
+            'tankName': self.tank_name,
+            'tankCode': self.tank_code,
+        }

@@ -50,13 +50,13 @@ def get_public_tank_details(tank_name):
         ]
 
         fish_info_list.append({
-            "fishType": fish_type.to_dict(include_image_data=True),
+            "fishType": fish_type.to_dict_QR_Purpose(include_image_data=True),
             "quantity": stock.quantity,
             "sameFishTanks": same_fish_tanks
         })
 
     response_data = {
-        "tank": tank.to_dict(),
+        "tank": tank.to_dict_QR_Purpose(),
         "fishList": fish_info_list
     }
 
