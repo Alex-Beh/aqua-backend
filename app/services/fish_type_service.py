@@ -37,7 +37,7 @@ class FishTypeService:
         return FishType.query.get(type_id)
 
     @staticmethod
-    def create(data, image_file=None, upload_folder=None, performed_by=None):
+    def create(data, image_file=None, performed_by=None):
         validation_errors = FishTypeService.validate_fields(data)
         if validation_errors:
             return api_response("Validation errors occurred", errors=validation_errors, status_code=400)
@@ -60,7 +60,7 @@ class FishTypeService:
             common_name=data.get('commonName'),
             scientific_name=data.get('scientificName'),
             size=size,
-            image_url=f"/uploads/fish_images/{type_code_}",
+            image_url=f"/uploads/fish_images/{type_code_}", # to-be-removed
             image_data=image_data,
             image_mime_type=image_mime_type,
             is_active=data.get('isActive', 'true').lower() == 'true',
@@ -72,7 +72,7 @@ class FishTypeService:
         return api_response("Fish type created successfully", data=new_fish_type.to_dict(), status_code=201)
 
     @staticmethod
-    def update(fish_type, data, image_file=None, upload_folder=None, performed_by=None):
+    def update(fish_type, data, image_file=None, performed_by=None):
         validation_errors = FishTypeService.validate_fields(data, for_update=True)
         if validation_errors:
             return api_response("Validation errors occurred", errors=validation_errors, status_code=400)
@@ -80,8 +80,6 @@ class FishTypeService:
         if image_file and FishTypeService.allowed_file(image_file.filename):
             filename = secure_filename(image_file.filename)
             filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{filename}"
-            image_file.save(os.path.join(upload_folder, filename))
-            fish_type.image_url = f"/uploads/fish_images/{filename}"
 
         fish_type.common_name = data.get('commonName', fish_type.common_name)
         fish_type.scientific_name = data.get('scientificName', fish_type.scientific_name)

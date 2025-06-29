@@ -26,7 +26,6 @@ def create_app():
     # app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
     print(f"URL: {app.config['SQLALCHEMY_DATABASE_URI']}")
 
-    app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER')
     app.config['MAX_CONTENT_LENGTH'] = int(os.getenv('MAX_CONTENT_LENGTH', 5242880))  # default to 5MB if not set
     app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'default_secret_key')
 
@@ -35,7 +34,6 @@ def create_app():
     login_manager.init_app(app)
     
     CORS(app)
-    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
     from app.models.app_user import AppUser
 
