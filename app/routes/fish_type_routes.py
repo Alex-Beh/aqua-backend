@@ -9,11 +9,6 @@ import os
 from app.services.fish_type_service import FishTypeService
 from app.utils import api_response, validate_json, paginate_response
 
-# # Helper function for file upload
-# def allowed_file(filename):
-#     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
-#     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
 static_bs = Blueprint('static_files', __name__)
 
 # # Apply login_required globally for all routes in this blueprint
@@ -44,9 +39,7 @@ def get_fish_types_paged():
     status = request.args.get('status')
     sort_field = request.args.get('sortField', 'type_code')
     sort_order = request.args.get('sortOrder', 'asc')
-
     paginated_data = FishTypeService.get_paginated(page, size, status, sort_field, sort_order)
-
     return api_response("Fish types retrieved successfully", data=paginated_data)
 
 # GET /api/fish-types?status=active
@@ -61,7 +54,7 @@ def get_all_fish_types():
 def get_all_fish_types_dropdwon():
     status = request.args.get('status')
     fish_types = FishTypeService.get_all(status=status)
-    return api_response("Fish types retrieved", data=[ft.to_dict_dropdown() for ft in fish_types])
+    return api_response("Fish types retrieved", data=[ft.to_dict_dropdown(include_image_data=False) for ft in fish_types])
 
 # GET /api/fish-types/<int:type_id>
 @bp.route('/<int:type_id>', methods=['GET'])
