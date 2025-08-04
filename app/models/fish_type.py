@@ -1,6 +1,5 @@
 import base64
 from app import db
-from datetime import datetime
 import enum
 
 # Fish Size Enum

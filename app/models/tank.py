@@ -36,7 +36,7 @@ class Tank(db.Model):
     def to_dict(self):
         return {
             'tankId': self.tank_id,
-            "site": self.site.to_dict() if self.site else None,  # 👈 include nested site
+            "site": self.site.to_dict() if self.site else None,
             'siteId': self.site_id,
             'tankName': self.tank_name,
             'tankCode': self.tank_code,
@@ -50,7 +50,7 @@ class Tank(db.Model):
             'updatedBy': self.updated_by,
             'deletedBy': self.deleted_by
         }
-    
+
     def to_dict_QR_Purpose(self):
         return {
             'tankId': self.tank_id,

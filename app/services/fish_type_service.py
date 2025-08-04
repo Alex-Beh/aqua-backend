@@ -3,7 +3,7 @@ from app.models import FishType
 from app.models.fish_type import FishSize
 from datetime import datetime
 from werkzeug.utils import secure_filename
-import os
+from sqlalchemy.orm import defer
 
 from app.utils import api_response, paginate_response
 
@@ -35,6 +35,26 @@ class FishTypeService:
     @staticmethod
     def get_by_id(type_id):
         return FishType.query.get(type_id)
+
+    @staticmethod
+    def get_minimal(status=None):
+        """Return only the small fields needed for selects / dashboards."""
+        return (
+            FishTypeService.base_query(status)
+            # Skip the big binary columns
+            .options(
+                defer(FishType.image_data),
+                defer(FishType.image_mime_type),
+            )
+            # Project only what you really need
+            .with_entities(
+                FishType.type_id,
+                FishType.type_code,
+                FishType.common_name,
+                FishType.scientific_name,
+            )
+            .all()
+        )
 
     @staticmethod
     def create(data, image_file=None, performed_by=None):

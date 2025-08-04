@@ -4,25 +4,68 @@ from sqlalchemy.orm import joinedload
 from app.utils import paginate_response
 from sqlalchemy import or_, cast, String, desc
 from datetime import datetime
+from sqlalchemy.orm import selectinload, load_only, defer
 
 class TankStockService:
 
     @staticmethod
-    def get_all_tank_stock(tank_id=None, fish_type_id=None, site_id=None, search_text=""):
-        """Fetches all tank stock with filters applied."""
-        query = TankStock.query.options(
-            joinedload(TankStock.tank),
-            joinedload(TankStock.fish_type)
-        ).join(Tank).join(FishType)
+    def get_all_tank_stock(
+        tank_id: int | None = None,
+        fish_type_id: int | None = None,
+        site_id: int | None = None,
+        search_text: str = ""
+    ):
+        """
+        Lightweight query:
+        • NO joins → fastest possible SELECT on tank_stock
+        • Relationships loaded lazily via select-IN (still avoids BLOBs)
+        """
+        q = (
+            TankStock.query
+            .options(
+                selectinload(TankStock.tank).load_only(
+                    Tank.tank_id, Tank.tank_code, Tank.tank_name, Tank.site_id
+                ),
+                selectinload(TankStock.fish_type)
+                    .load_only(
+                        FishType.type_id,
+                        FishType.common_name,
+                        FishType.scientific_name,
+                        FishType.type_code,
+                    )
+                    .defer(FishType.image_data)
+                    .defer(FishType.image_mime_type),
+            )
+        )
 
-        # Apply filters
-        query = TankStockService.apply_filters(query, tank_id, fish_type_id, site_id, search_text)
-        
-        # If tank_id and fish_type_id are provided, return only the first match (i.e., a single record)
+        # --- filters without explicit JOINs ---
+        if tank_id:
+            q = q.filter(TankStock.tank_id == tank_id)
+
+        if fish_type_id:
+            q = q.filter(TankStock.fish_type_id == fish_type_id)
+
+        if site_id:
+            # use relationship predicate instead of JOIN
+            q = q.filter(TankStock.tank.has(site_id=site_id))
+
+        if search_text:
+            like = f"%{search_text.lower()}%"
+            q = q.filter(
+                TankStock.fish_type.has(
+                    db.or_(
+                        db.func.lower(FishType.common_name).like(like),
+                        db.func.lower(FishType.type_code).like(like),
+                        db.func.lower(FishType.scientific_name).like(like),
+                    )
+                )
+            )
+
+        # single-row shortcut
         if tank_id and fish_type_id:
-            return query.filter(TankStock.tank_id == tank_id, TankStock.fish_type_id == fish_type_id).first()
+            return q.first()
 
-        return query
+        return q 
 
     @staticmethod
     def apply_filters(query, tank_id=None, fish_type_id=None, site_id=None, search_text=""):

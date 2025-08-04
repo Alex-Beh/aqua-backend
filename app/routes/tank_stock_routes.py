@@ -1,18 +1,11 @@
 import math
 from flask import Blueprint, request
-from sqlalchemy import or_, cast, String, desc
-from app.models import TankStock, StockAdjustment
 from app import db
-from datetime import datetime
 from app.models.site import Site
-from app.models.stock_take import StockTake
-from app.models.stock_take_item import StockTakeItem
 from app.services.tank_stock_service import TankStockService
-from app.utils import api_response, validate_json, paginate_response
-from sqlalchemy.orm import joinedload
+from app.utils import api_response
 from app.models.tank import Tank
 from app.models.fish_type import FishType
-from sqlalchemy import func
 
 stock_bp = Blueprint("stock_bp", __name__, url_prefix="/api/tank-stock")
 
@@ -22,17 +15,8 @@ stock_bp = Blueprint("stock_bp", __name__, url_prefix="/api/tank-stock")
 # def before_request():
 #     pass
 
-# --------------------- Serialization ---------------------
-def _serialize_stock(ts: TankStock) -> dict:
-    return {
-        "tankId": ts.tank_id,
-        "fishTypeId": ts.fish_type_id,
-        "quantity": ts.quantity,
-        "lastUpdated": ts.last_updated.isoformat() if ts.last_updated else None,
-    }
-
 # --------------------- Endpoints ---------------------
-# ✅ List all tank stock records, with optional filtering by tankId or fishTypeId
+# List all tank stock records, with optional filtering by tankId or fishTypeId
 @stock_bp.route("/paging", methods=["GET"])
 def get_list_stock_paged():
     # Pagination
@@ -55,55 +39,33 @@ def get_list_stock_paged():
 
     return api_response("Tank stock retrieved successfully", data=paginated_data)
 
-# ✅ List all tank stock records, with optional filtering by tankId or fishTypeId
-@stock_bp.route("", methods=["GET"])
+# List all tank stock records, with optional filtering by tankId or fishTypeId
+@stock_bp.route("/", methods=["GET"])
 def list_stock():
-    tank_id = request.args.get("tankId", type=int)
+    tank_id      = request.args.get("tankId", type=int)
     fish_type_id = request.args.get("fishTypeId", type=int)
-    site_id = request.args.get("siteId", type=int)
-    search_text = request.args.get("searchText", "", type=str).strip()
+    site_id      = request.args.get("siteId", type=int)
+    search_text  = request.args.get("searchText", "", type=str).strip()
 
-    stock_list = TankStockService.get_all_tank_stock(
+    query = TankStockService.get_all_tank_stock(
         tank_id, fish_type_id, site_id, search_text
-    ).order_by(Tank.tank_name, FishType.common_name).all()
+    )
+    stock_list = query.all()
 
-    return api_response("Tank stock retrieved successfully", data=[ts.to_dict() for ts in stock_list])
+    # --- Python-side sort by tank_name then fish common_name ---
+    stock_list.sort(
+        key=lambda ts: (
+            ts.tank.tank_name.lower()  if ts.tank and ts.tank.tank_name else "",
+            ts.fish_type.common_name.lower() if ts.fish_type else "",
+        )
+    )
 
+    return api_response(
+        "Tank stock retrieved successfully",
+        data=[ts.to_dict_light() for ts in stock_list],
+    )
 
-# def get_tank_stock_list(tank_id=None, fish_type_id=None, site_id=None):
-#     q = TankStock.query.options(
-#         joinedload(TankStock.tank),
-#         joinedload(TankStock.fish_type)
-#     ).join(Tank).join(FishType)
-
-#     # Apply filters
-#     q = apply_tank_stock_filters(q, tank_id, fish_type_id, site_id)
-#     # Always apply consistent ordering
-#     q = q.order_by(Tank.tank_name, FishType.common_name)
-
-#     return [ts.to_dict() for ts in q.all()]
-
-# def apply_tank_stock_filters(q, tank_id=None, fish_type_id=None, site_id=None, search_text=""):
-#     if tank_id and tank_id > 0:
-#         q = q.filter(TankStock.tank_id == tank_id)
-#     if fish_type_id and fish_type_id > 0:
-#         q = q.filter(TankStock.fish_type_id == fish_type_id)
-#     if site_id and site_id > 0:
-#         q = q.filter(Tank.site_id == site_id)
-#     if search_text:
-#         search_lower = f"%{search_text.lower()}%"
-
-#         q = q.filter(
-#             db.or_(
-#                 db.func.lower(Tank.tank_name).like(search_lower),
-#                 db.func.lower(FishType.common_name).like(search_lower),
-#                 db.func.lower(FishType.type_code).like(search_lower),
-#                 cast(TankStock.quantity, String).like(search_lower)
-#             )
-#         )
-#     return q
-
-# ✅ Get a specific tank+fish_type stock record (read-only)
+# Get a specific tank+fish_type stock record (read-only)
 @stock_bp.route("/<int:tank_id>/<int:fish_type_id>", methods=["GET"])
 def get_stock(tank_id, fish_type_id):
     stock = TankStockService.get_all_tank_stock(tank_id=tank_id, fish_type_id=fish_type_id)
@@ -111,7 +73,7 @@ def get_stock(tank_id, fish_type_id):
         return api_response("Tank stock not found", status=404)
     return api_response("Tank stock retrieved", data=stock.to_dict())
 
-# ✅ List low-stock entries under a threshold (e.g., below 10)
+# List low-stock entries under a threshold (e.g., below 10)
 @stock_bp.route("/low-stock", methods=["GET"])
 def low_stock():
     threshold = request.args.get("threshold", default=10, type=int)
@@ -126,7 +88,7 @@ def low_stock():
     return api_response(f"Stocks with quantity below {threshold}", data=result)
 
 
-# ✅ Get the total quantity of a specific fish type across all tanks
+# Get the total quantity of a specific fish type across all tanks
 @stock_bp.route("/total-quantity/<int:fish_type_id>", methods=["GET"])
 def get_total_quantity(fish_type_id):
     # Query to get the details of the fish type (e.g., common name, scientific name)
@@ -180,7 +142,7 @@ def get_top_tanks_by_quantity():
 
     return api_response("Top tanks by fish inventory", data=result)
 
-# ✅ Get Site Distribution including Total Fish Count, Tank Count, and Fish Type Count
+# Get Site Distribution including Total Fish Count, Tank Count, and Fish Type Count
 @stock_bp.route("/dashboard/site-distribution", methods=["GET"])
 def get_site_distribution():
     site_id = request.args.get("siteId", type=int)
