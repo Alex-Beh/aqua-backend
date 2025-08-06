@@ -81,3 +81,16 @@ class StockAdjustment(db.Model):
             'updatedBy': self.updated_by,
             "updatedAt": self.updated_at.isoformat() if self.updated_at else None
         }
+    
+    def to_dict_light(self):
+        return {
+            "id":            self.stock_adjustment_id,
+            "tankId":        self.tank_id,
+            "tankCode":      self.tank.tank_code,
+            "fishTypeId":    self.fish_type_id,
+            "typeCode":      self.fish_type.type_code,
+            "transaction":   self.transaction_type,
+            "date":          self.transaction_date.isoformat(),
+            "qtyBefore":     self.quantity_before,
+            "qtyAfter":      self.quantity_after,
+        }

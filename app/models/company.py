@@ -1,22 +1,33 @@
 from app import db
-from datetime import datetime
+from sqlalchemy import Index, func
 
-# Company model
+
 class Company(db.Model):
     __tablename__ = 'company'
+
+    __table_args__ = (
+        Index('ix_company_name', 'company_name'),
+    )
 
     company_id = db.Column(db.Integer, primary_key=True)
     company_name = db.Column(db.String(100), nullable=False)
     company_code = db.Column(db.String(50), unique=True, nullable=False)
+
     hotline = db.Column(db.String(50))
     email = db.Column(db.String(100))
     address = db.Column(db.Text)
+
     created_by = db.Column(db.String(100))
-    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+    created_at = db.Column(db.DateTime(timezone=True),
+                           server_default=func.now(), nullable=False)
     updated_by = db.Column(db.String(100))
-    updated_at = db.Column(db.DateTime, onupdate=db.func.current_timestamp())
+    updated_at = db.Column(db.DateTime(timezone=True),
+                           server_onupdate=func.now())
     deleted_by = db.Column(db.String(100))
-    deleted_at = db.Column(db.DateTime)
+    deleted_at = db.Column(db.DateTime(timezone=True))
+
+    # If Site.company_id is FK, add:
+    # sites = db.relationship("Site", back_populates="company", lazy="selectin")
 
     def to_dict(self):
         return {
@@ -33,12 +44,6 @@ class Company(db.Model):
             'deletedBy': self.deleted_by,
             'deletedAt': self.deleted_at.isoformat() if self.deleted_at else None,
         }
-    
-    @staticmethod
-    def validate_fields(data, for_update=False):
-        errors = {}
-
-        return errors if errors else None
 
     def __repr__(self):
         return f"<Company {self.company_code}>"

@@ -110,7 +110,7 @@ class TankStockService:
         sort_column = sort_mapping.get(sort_field, Tank.tank_name)
         query = query.order_by(sort_column.desc() if sort_order == "desc" else sort_column)
 
-        return paginate_response(query, page, size, sort_order)
+        return paginate_response(query, page, size, TankStock, sort_order)
 
     @staticmethod
     def get_stock_summary(site_id=None):

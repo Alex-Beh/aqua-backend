@@ -1,12 +1,12 @@
+from flask import Blueprint, request
+from sqlalchemy.orm import selectinload
 
-from flask import Blueprint, request, jsonify
 from datetime import datetime, timedelta
 
 from flask_login import current_user
 
 from app import db
-from app.models import StockAdjustment
-from app.models.fish_type import FishType
+from app.models import StockAdjustment, FishType
 from app.models.tank import Tank
 from app.models.tank_stock import TankStock
 from app.models.stock_take import StockTake
@@ -19,7 +19,8 @@ from sqlalchemy import or_
 # ---------------------------------------------------------------------------
 # Stock‑adjustment endpoints ------------------------------------------------
 # ---------------------------------------------------------------------------
-adjust_bp  = Blueprint("adjust_bp",  __name__, url_prefix="/api/stock-adjustments")
+adjust_bp = Blueprint("adjust_bp",  __name__,
+                      url_prefix="/api/stock-adjustments")
 
 # # Apply login_required globally for all routes in this blueprint
 # @tanks_bp.before_request
@@ -27,22 +28,16 @@ adjust_bp  = Blueprint("adjust_bp",  __name__, url_prefix="/api/stock-adjustment
 # def before_request():
 #     pass
 
+
 def get_performed_by():
     return current_user.name if current_user.is_authenticated else "Anonymous"
 
-# --------------------- Serialization ---------------------
-def _serialize_stock(ts: TankStock) -> dict:
-    return {
-        "tankId": ts.tank_id,
-        "fishTypeId": ts.fish_type_id,
-        "quantity": ts.quantity,
-        "lastUpdated": ts.last_updated.isoformat() if ts.last_updated else None,
-    }
 
-@adjust_bp.route("", methods=["GET"])
+@adjust_bp.route("/", methods=["GET"])
 def list_adjustments():
     tank_id = request.args.get("tankId", type=int)
-    fish_type_id = request.args.get("fishTypeId", type=int)  # Updated to fish_type_id
+    fish_type_id = request.args.get(
+        "fishTypeId", type=int)  # Updated to fish_type_id
     transaction_type = request.args.get("transactionType")
     since = request.args.get("since")  # ISO‑8601 strings
     until = request.args.get("until")
@@ -53,100 +48,153 @@ def list_adjustments():
     if fish_type_id:
         q = q.filter_by(fish_type_id=fish_type_id)
     if transaction_type:
-        q = q.filter(StockAdjustment.transaction_type == transaction_type.capitalize()) 
+        q = q.filter(StockAdjustment.transaction_type ==
+                     transaction_type.capitalize())
     if since:
         q = q.filter(StockAdjustment.transaction_date >= since)
     if until:
         q = q.filter(StockAdjustment.transaction_date <= until)
 
     # If no date range is provided, set a default limit (e.g., 100 records)
-    rows = q.order_by(StockAdjustment.transaction_date.desc()).limit(100).all() if not since and not until else q.order_by(StockAdjustment.transaction_date.desc()).all()
-    
-    return api_response("Stock adjustments retrieved successfully", data=[adj.to_dict() for adj in rows])
+    rows = q.order_by(StockAdjustment.transaction_date.desc()).limit(100).all(
+    ) if not since and not until else q.order_by(StockAdjustment.transaction_date.desc()).all()
+
+    return api_response("Stock adjustments retrieved successfully", data=[adj.to_dict_light() for adj in rows])
+
 
 @adjust_bp.route("/paging", methods=["GET"])
 def list_adjustments_paged():
-    # Pagination
-    page = request.args.get('page', 1, type=int)
-    size = request.args.get('size', 10, type=int)
+    # ---------------- Pagination -------------------------------------------------
+    page = request.args.get("page", 1, type=int)
+    size = request.args.get("size", 10, type=int)
 
-    # Sorting
+    # ---------------- Sorting ----------------------------------------------------
     sort_field = request.args.get("sortField", "transaction_date")
     sort_order = request.args.get("sortOrder", "desc")
 
-    # Filters
+    # ---------------- Filters ----------------------------------------------------
     tank_id = request.args.get("tankId", type=int)
     fish_type_id = request.args.get("fishTypeId", type=int)
     transaction_type = request.args.get("transactionType", type=str)
-    since = request.args.get("since")  # ISO date string
-    until = request.args.get("until")  # ISO date string
+    since = request.args.get("since")          # ISO string
+    until = request.args.get("until")          # ISO string
     search_text = request.args.get("searchText", "", type=str).strip()
 
-    query = StockAdjustment.query.join(FishType, StockAdjustment.fish_type_id == FishType.type_id)
+    # ---------------- Base query (no JOIN yet) -----------------------------------
+    query = StockAdjustment.query
 
-    if tank_id and tank_id > 0:
-        query = query.filter(StockAdjustment.tank_id == tank_id)
-    if fish_type_id and fish_type_id > 0:
-        query = query.filter(StockAdjustment.fish_type_id == fish_type_id)
+    if tank_id:
+        query = query.filter_by(tank_id=tank_id)
+    if fish_type_id:
+        query = query.filter_by(fish_type_id=fish_type_id)
     if transaction_type:
-        query = query.filter(StockAdjustment.transaction_type == transaction_type)
-    if since:
-        query = query.filter(StockAdjustment.transaction_date >= since)
-    if until:
-        query = query.filter(StockAdjustment.transaction_date <= until)
+        query = query.filter_by(transaction_type=transaction_type)
+    # if since:
+    #     query = query.filter(
+    #         StockAdjustment.transaction_date >= dtparse(since))
+    # if until:
+    #     query = query.filter(
+    #         StockAdjustment.transaction_date <= dtparse(until))
 
+    # ---------------- Text search (requires JOIN) --------------------------------
     if search_text:
-        search_lower = f"%{search_text.lower()}%"
-        query = query.filter(
-            or_(
-                db.func.lower(FishType.common_name).like(search_lower),
-                db.func.lower(FishType.type_code).like(search_lower),
-                db.func.lower(FishType.scientific_name).like(search_lower),
+        like = f"%{search_text.lower()}%"
+        query = (
+            query.join(FishType)
+                 .filter(
+                     or_(
+                         db.func.lower(FishType.common_name).like(like),
+                         db.func.lower(FishType.type_code).like(like),
+                         db.func.lower(FishType.scientific_name).like(like),
+                     )
             )
         )
 
-    paginated = paginate_response(
-        query=query,
-        page=page,
-        size=size,
-        model_class=StockAdjustment,
-        sort_field=sort_field,
-        sort_order=sort_order,
+    # ---------------- Eager-load relationships to avoid N+1 ----------------------
+    query = query.options(
+        selectinload(StockAdjustment.tank)              # tank relationship
+        # ← use Tank.<attr>, not "tank_id"
+        .load_only(Tank.tank_id, Tank.tank_code),
+
+        # fish-type relationship
+        selectinload(StockAdjustment.fish_type)
+        .load_only(
+            FishType.type_id,
+            FishType.type_code,
+            FishType.common_name,
+        ),
     )
 
-    return api_response("Stock adjustments retrieved successfully", data=paginated)
+    # ---------------- Offset/limit pagination ------------------------------------
+    items = (
+        query.limit(size)
+             .offset((page - 1) * size)
+             .all()
+    )
+
+    # total count (fast because subquery re-uses filters)
+    total = (
+        db.session.query(db.func.count())
+        .select_from(query.subquery())
+        .scalar()
+    )
+
+    # ---------------- Response ----------------------------------------------------
+    return api_response(
+        "Stock adjustments retrieved successfully",
+        data={
+            # make sure this helper exists
+            "items": [adj.to_dict() for adj in items],
+            "page":  page,
+            "size":  size,
+            "total": total,
+        },
+    )
+
 
 @adjust_bp.route("/<int:adjustment_id>", methods=["GET"])
 def get_adjustment(adjustment_id):
     adj = StockAdjustment.query.get(adjustment_id)
     return api_response("Stock adjustment retrieved successfully", data=adj.to_dict())
 
+
 @adjust_bp.route("", methods=["POST"])
 def upsert_stock():
+    print("upsert stock")
     data = request.get_json(force=True)
     transaction_type = data.get("transactionType")
     if not transaction_type:
         return api_response("Missing required field: transactionType", status_code=400)
     return _handle_stock_change(transaction_type.upper())
 
+
 @adjust_bp.route("/add", methods=["POST"])
 def add_fish():
     return _handle_stock_change("ADDITION")
+
 
 @adjust_bp.route("/remove", methods=["POST"])
 def remove_fish():
     return _handle_stock_change("REMOVAL")
 
+
 @adjust_bp.route("/death", methods=["POST"])
 def record_death():
     return _handle_stock_change("DEATH")
+
 
 @adjust_bp.route("/transfer", methods=["POST"])
 def transfer_fish():
     return _handle_stock_change("TRANSFER")
 
 
+@adjust_bp.route("/stock-take/create", methods=["POST"])
+def create_stock_take():
+    return _handle_stock_take_creation()
+
 # --------------------- Core Handler ---------------------
+
+
 def _handle_stock_change(transaction_type: str):
     data = request.get_json(force=True)
     tank_id = data["tankId"]
@@ -174,7 +222,8 @@ def _handle_stock_change(transaction_type: str):
             return api_response("Quantity must be greater than 0", status_code=400)
 
         # Step 2: Check tank existence and status
-        source_tank = Tank.query.filter_by(tank_id=tank_id, deleted_at=None).first()
+        source_tank = Tank.query.filter_by(
+            tank_id=tank_id, deleted_at=None).first()
         if not source_tank or source_tank.status.lower() != "active":
             return api_response(f"Source tank {tank_id} is not in use (inactive or deleted).", status_code=400)
 
@@ -183,16 +232,18 @@ def _handle_stock_change(transaction_type: str):
             return api_response(f"Tank {tank_id} has an active stock take (Draft or Pending). Adjustment not allowed.", status_code=400)
 
         if target_tank_id:
-            target_tank = Tank.query.filter_by(tank_id=target_tank_id, deleted_at=None).first()
+            target_tank = Tank.query.filter_by(
+                tank_id=target_tank_id, deleted_at=None).first()
             if not target_tank or target_tank.status.lower() != "active":
                 return api_response(f"Target tank {target_tank_id} is not in use (inactive or deleted).", status_code=400)
-            
+
             # CHECK the target tank
             if StockTake.is_stock_take_in_progress(target_tank_id):
                 return api_response(f"Target tank {target_tank_id} has an active stock take (Draft or Pending). Adjustment not allowed.", status_code=400)
 
         # Step 3: Validate Fish Type
-        fish_type = FishType.query.filter_by(type_id=fish_type_id, deleted_at=None).first()
+        fish_type = FishType.query.filter_by(
+            type_id=fish_type_id, deleted_at=None).first()
         if not fish_type:
             return api_response(f"Fish Type {fish_type_id} does not exist or is deleted.", status_code=400)
         if not fish_type.is_active:
@@ -236,7 +287,8 @@ def _handle_stock_change(transaction_type: str):
             quantity_before = get_current_quantity(tank_id, fish_type_id)
 
             # Perform update
-            ts = update_tank_stock(tank_id, fish_type_id, quantity_change, transaction_type)
+            ts = update_tank_stock(tank_id, fish_type_id,
+                                   quantity_change, transaction_type)
             db.session.flush()
 
             # Step 4: Create adjustment log (after update)
@@ -273,12 +325,14 @@ def _handle_stock_change(transaction_type: str):
         status_code=201 if ts.quantity == quantity_change and transaction_type == "ADDITION" else 200
     )
 
+
 def get_current_quantity(tank_id, fish_type_id):
     # Query to get the current quantity of a specific fish type in a tank
-    tank_stock = TankStock.query.filter_by(tank_id=tank_id, fish_type_id=fish_type_id).first()
+    tank_stock = TankStock.query.filter_by(
+        tank_id=tank_id, fish_type_id=fish_type_id).first()
     return tank_stock.quantity if tank_stock else 0
 
-# --------------------- Adjustment Record ---------------------
+
 def create_stock_adjustment(transaction_type, tank_id, fish_type_id, quantity_before, quantity_after, reason, notes, quantity_change=None, target_tank_id=None):
     now = db.func.current_timestamp()
     transaction_type_clean = transaction_type.capitalize()
@@ -292,10 +346,12 @@ def create_stock_adjustment(transaction_type, tank_id, fish_type_id, quantity_be
         target_tank = Tank.query.get(target_tank_id)
 
         # Get the current quantity in the target tank before the transfer
-        target_quantity_before = get_current_quantity(target_tank_id, fish_type_id) - quantity_change
+        target_quantity_before = get_current_quantity(
+            target_tank_id, fish_type_id) - quantity_change
 
         source_quantity_after = quantity_after  # This is from the source tank's update
-        target_quantity_after = target_quantity_before + quantity_change #quantity_change is Orignal User Input
+        target_quantity_after = target_quantity_before + \
+            quantity_change  # quantity_change is Orignal User Input
 
         # Add transfer-related notes for source and target tanks, with information at the front and separated by a comma
         updated_notes_source = f"(Transferred to tank {target_tank.tank_code} - {target_tank.tank_name}), {notes or ''}"
@@ -331,7 +387,8 @@ def create_stock_adjustment(transaction_type, tank_id, fish_type_id, quantity_be
 
     elif transaction_type in {"ADDITION", "REMOVAL", "DEATH"}:
         if transaction_type in {"REMOVAL", "DEATH"} and quantity_after > quantity_before:
-            raise ValueError(f"Quantity after cannot exceed before for {transaction_type}")
+            raise ValueError(
+                f"Quantity after cannot exceed before for {transaction_type}")
         db.session.add(
             StockAdjustment(
                 transaction_type=transaction_type_clean,
@@ -348,7 +405,7 @@ def create_stock_adjustment(transaction_type, tank_id, fish_type_id, quantity_be
     else:
         raise ValueError("Invalid transaction type")
 
-# --------------------- Stock Update ---------------------
+
 def update_tank_stock(tank_id, fish_type_id, quantity_change, transaction_type, target_tank_id=None):
     now = db.func.current_timestamp()
 
@@ -387,21 +444,19 @@ def update_tank_stock(tank_id, fish_type_id, quantity_change, transaction_type, 
             ts.quantity += quantity_change
             ts.last_updated = now
         else:
-            ts = TankStock(tank_id=tank_id, fish_type_id=fish_type_id, quantity=quantity_change, last_updated=now)
+            ts = TankStock(tank_id=tank_id, fish_type_id=fish_type_id,
+                           quantity=quantity_change, last_updated=now)
             db.session.add(ts)
 
     elif transaction_type in {"REMOVAL", "DEATH"}:
         if not ts or ts.quantity < quantity_change:
-            raise ValueError(f"Not enough fish in tank {tank_id} to perform {transaction_type.lower()}.")
+            raise ValueError(
+                f"Not enough fish in tank {tank_id} to perform {transaction_type.lower()}.")
         ts.quantity -= quantity_change
         ts.last_updated = now
 
     return ts
 
-# --------------------- Stock Take Routes ---------------------
-@adjust_bp.route("/stock-take/create", methods=["POST"])
-def create_stock_take():
-    return _handle_stock_take_creation()
 
 def _handle_stock_take_creation():
     data = request.get_json(force=True)
@@ -430,8 +485,10 @@ def _handle_stock_take_creation():
             return api_response("A stock take is already in progress for this tank (Draft or Pending status).", status_code=400)
 
         # Validate fish items
-        valid_ids, id_to_name, expected_qty_map = extract_fish_stock_info(tank_id)
-        errors = validate_fish_items_stock_take(fish_items, valid_ids, id_to_name)
+        valid_ids, id_to_name, expected_qty_map = extract_fish_stock_info(
+            tank_id)
+        errors = validate_fish_items_stock_take(
+            fish_items, valid_ids, id_to_name)
         if errors:
             return api_response("There were errors with the fish items.", errors=errors, status_code=400)
 
@@ -451,7 +508,8 @@ def _handle_stock_take_creation():
         db.session.flush()
 
         # Create items
-        items = build_stock_take_items(stock_take.stock_take_id, fish_items, expected_qty_map)
+        items = build_stock_take_items(
+            stock_take.stock_take_id, fish_items, expected_qty_map)
         db.session.add_all(items)
         db.session.commit()
 
@@ -460,6 +518,7 @@ def _handle_stock_take_creation():
     except SQLAlchemyError as e:
         db.session.rollback()
         return api_response("Unexpected DB error", errors=str(e), status_code=500)
+
 
 @adjust_bp.route("/stock-take/update/<int:stock_take_id>", methods=["PUT"])
 def update_stock_take(stock_take_id):
@@ -484,8 +543,10 @@ def update_stock_take(stock_take_id):
             return api_response("Cannot update stock take for inactive or missing tank", status_code=400)
 
         # Re-validate fish items
-        valid_ids, id_to_name, expected_qty_map = extract_fish_stock_info(tank.tank_id)
-        errors = validate_fish_items_stock_take(fish_items, valid_ids, id_to_name)
+        valid_ids, id_to_name, expected_qty_map = extract_fish_stock_info(
+            tank.tank_id)
+        errors = validate_fish_items_stock_take(
+            fish_items, valid_ids, id_to_name)
         if errors:
             return api_response("There were errors with the fish items.", errors=errors, status_code=400)
 
@@ -503,7 +564,8 @@ def update_stock_take(stock_take_id):
         # Delete existing items and re-add
         StockTakeItem.query.filter_by(stock_take_id=stock_take_id).delete()
 
-        new_items = build_stock_take_items(stock_take_id, fish_items, expected_qty_map)
+        new_items = build_stock_take_items(
+            stock_take_id, fish_items, expected_qty_map)
         db.session.add_all(new_items)
 
         db.session.commit()
@@ -512,6 +574,7 @@ def update_stock_take(stock_take_id):
     except SQLAlchemyError as e:
         db.session.rollback()
         return api_response("Unexpected DB error", errors=str(e), status_code=500)
+
 
 @adjust_bp.route("/stock-take/create-and-approve", methods=["POST"])
 def quick_create_and_approve_stock_take():
@@ -534,6 +597,7 @@ def quick_create_and_approve_stock_take():
     except Exception as e:
         return api_response("Stock take created but approval failed", errors=str(e), status_code=500)
 
+
 def get_tank_stock_list(tank_id=None, fish_type_id=None, site_id=None):
     q = TankStock.query.options(
         joinedload(TankStock.tank),
@@ -543,7 +607,7 @@ def get_tank_stock_list(tank_id=None, fish_type_id=None, site_id=None):
     # Apply filters
     if tank_id and tank_id > 0:
         q = q.filter(TankStock.tank_id == tank_id)
-        
+
     # Always apply consistent ordering
     q = q.order_by(Tank.tank_name, FishType.common_name)
 
@@ -556,7 +620,8 @@ def extract_fish_stock_info(tank_id):
     """
     fish_stock_list = get_tank_stock_list(tank_id=tank_id)
     valid_ids = {item["fishTypeId"] for item in fish_stock_list}
-    id_to_name = {item["fishTypeId"]: item["fishType"]["commonName"] for item in fish_stock_list}
+    id_to_name = {item["fishTypeId"]: item["fishType"]
+                  ["commonName"] for item in fish_stock_list}
     id_to_expected_qty = {item["fishTypeId"]: item["quantity"] for item in fish_stock_list}
     return valid_ids, id_to_name, id_to_expected_qty
 
@@ -571,13 +636,16 @@ def validate_fish_items_stock_take(fish_items, valid_fish_type_ids, fish_type_id
         if not fish_type_id:
             item_errors.append("Fish type ID is required.")
         elif fish_type_id not in valid_fish_type_ids:
-            item_errors.append("This fish type does not exist in this tank’s stock.")
+            item_errors.append(
+                "This fish type does not exist in this tank’s stock.")
 
         if counted_quantity is None or counted_quantity < 0:
-            item_errors.append("Counted quantity must be a non-negative integer.")
+            item_errors.append(
+                "Counted quantity must be a non-negative integer.")
 
         if item_errors:
-            label = fish_type_id_to_name.get(fish_type_id, f"Unknown Fish Type ({fish_type_id})")
+            label = fish_type_id_to_name.get(
+                fish_type_id, f"Unknown Fish Type ({fish_type_id})")
             errors[label] = item_errors
 
     return errors
@@ -597,17 +665,22 @@ def build_stock_take_items(stock_take_id, fish_items, expected_quantity_map):
     ]
 
 # Common function for fetching stock take and validating status
+
+
 def get_stock_take_and_validate(stock_take_id, valid_statuses, action):
     stock_take = StockTake.query.get(stock_take_id)
     if not stock_take:
         raise ValueError("Stock take not found")
-    
+
     if stock_take.status not in valid_statuses:
-        raise ValueError(f"Stock take with status '{stock_take.status}' cannot be {action}")
+        raise ValueError(
+            f"Stock take with status '{stock_take.status}' cannot be {action}")
 
     return stock_take
 
 # Common logic for updating status
+
+
 def update_stock_take_status(stock_take, status, review_comment):
     stock_take.status = status
     stock_take.review_comment = review_comment
@@ -617,6 +690,8 @@ def update_stock_take_status(stock_take, status, review_comment):
     db.session.commit()
 
 # Approve endpoint
+
+
 @adjust_bp.route("/stock-take/approve/<int:stock_take_id>", methods=["PUT"])
 def approve_stock_take(stock_take_id):
     data = request.get_json(force=True)
@@ -631,12 +706,14 @@ def approve_stock_take(stock_take_id):
         db.session.rollback()
         return api_response("Unexpected DB error", errors=str(e), status_code=500)
 
+
 def approve_stock_take_logic(stock_take_id: int, review_comment: str = None):
     """
     Core logic for approving a stock take. Can be reused in tests or other routes.
     Raises ValueError or SQLAlchemyError as needed.
     """
-    stock_take = get_stock_take_and_validate(stock_take_id, ["Pending"], "approve")
+    stock_take = get_stock_take_and_validate(
+        stock_take_id, ["Pending"], "approve")
 
     # Apply changes to stock + log adjustments
     apply_stock_take_to_stock(stock_take, review_comment)
@@ -645,6 +722,7 @@ def approve_stock_take_logic(stock_take_id: int, review_comment: str = None):
     update_stock_take_status(stock_take, "Approved", review_comment)
 
     return stock_take
+
 
 def apply_stock_take_to_stock(stock_take, review_comment):
     for item in stock_take.items:
@@ -664,7 +742,8 @@ def apply_stock_take_to_stock(stock_take, review_comment):
         # Format reason and notes with initiate_at
         now = db.session.execute(db.func.current_timestamp()).scalar()
         now_str = now.strftime("%b %d, %Y %I:%M %p") if now else "Unknown"
-        init_str = stock_take.initiate_at.strftime("%b %d, %Y %I:%M %p") if stock_take.initiate_at else "Unknown"
+        init_str = stock_take.initiate_at.strftime(
+            "%b %d, %Y %I:%M %p") if stock_take.initiate_at else "Unknown"
 
         reason = f"Stock take adjustment (initiated on {init_str}, applied on {now_str})"
         notes = f"Review comment: {review_comment or 'None'}"
@@ -679,7 +758,7 @@ def apply_stock_take_to_stock(stock_take, review_comment):
             reason=reason,
             notes=notes,
             recorded_by=get_performed_by(),
-            recorded_at=now 
+            recorded_at=now
         )
         db.session.add(stock_adjustment)
         db.session.flush()
@@ -699,13 +778,16 @@ def apply_stock_take_to_stock(stock_take, review_comment):
             ))
 
 # Reject endpoint
+
+
 @adjust_bp.route("/stock-take/reject/<int:stock_take_id>", methods=["PUT"])
 def reject_stock_take(stock_take_id):
     data = request.get_json(force=True)
     review_comment = data.get("reviewComment")
 
     try:
-        stock_take = get_stock_take_and_validate(stock_take_id, ["Pending"], "reject")
+        stock_take = get_stock_take_and_validate(
+            stock_take_id, ["Pending"], "reject")
         update_stock_take_status(stock_take, "Rejected", review_comment)
 
         return api_response("Stock take rejected successfully")
@@ -717,13 +799,16 @@ def reject_stock_take(stock_take_id):
         return api_response("Unexpected DB error", errors=str(e), status_code=500)
 
 # Cancel endpoint
+
+
 @adjust_bp.route("/stock-take/cancel/<int:stock_take_id>", methods=["PUT"])
 def cancel_stock_take(stock_take_id):
     data = request.get_json(force=True)
     review_comment = data.get("reviewComment")
 
     try:
-        stock_take = get_stock_take_and_validate(stock_take_id, ["Draft", "Pending"], "cancel")
+        stock_take = get_stock_take_and_validate(
+            stock_take_id, ["Draft", "Pending"], "cancel")
         update_stock_take_status(stock_take, "Cancelled", review_comment)
 
         return api_response("Stock take cancelled successfully")
@@ -733,6 +818,7 @@ def cancel_stock_take(stock_take_id):
     except SQLAlchemyError as e:
         db.session.rollback()
         return api_response("Unexpected DB error", errors=str(e), status_code=500)
+
 
 @adjust_bp.route("/stock-take/<int:stock_take_id>", methods=["GET"])
 def get_stock_take(stock_take_id):
@@ -748,6 +834,7 @@ def get_stock_take(stock_take_id):
         "stockTake": stock_take.to_dict(),
         "items": [item.to_dict() for item in stock_take.items]
     })
+
 
 @adjust_bp.route("/stock-take/paging", methods=["GET"])
 def list_stock_takes_paged():
@@ -795,10 +882,11 @@ def list_stock_takes_paged():
             )
         )
 
-    allowed_sort_fields = ["initiate_by", "initiate_at", "finalize_by", "finalize_at", "status"]
+    allowed_sort_fields = ["initiate_by", "initiate_at",
+                           "finalize_by", "finalize_at", "status"]
     if sort_field not in allowed_sort_fields:
         sort_field = "initiate_at"
-        
+
     # Avoid duplicate results when joining
     query = query.distinct()
 
@@ -846,9 +934,11 @@ def list_stock_takes():
         q = q.filter(StockTake.initiate_at <= until)
 
     # Optional limit for default view
-    rows = q.order_by(StockTake.initiate_at.desc()).limit(100).all() if not since and not until else q.order_by(StockTake.initiate_at.desc()).all()
+    rows = q.order_by(StockTake.initiate_at.desc()).limit(100).all(
+    ) if not since and not until else q.order_by(StockTake.initiate_at.desc()).all()
 
     return api_response("Stock takes retrieved", data=[r.to_dict() for r in rows])
+
 
 @adjust_bp.route("/stock-take-count", methods=["GET"])
 def stock_take_counts():
@@ -861,13 +951,13 @@ def stock_take_counts():
     month = request.args.get("month", type=int)
     year = request.args.get("year", type=int)
     since = request.args.get("since")
-    until = request.args.get("until") 
+    until = request.args.get("until")
 
     try:
         if since:
             since = datetime.strptime(since, "%Y-%m-%d")
         if until:
-            until = datetime.strptime(until, "%Y-%m-%d") + timedelta(days=1) 
+            until = datetime.strptime(until, "%Y-%m-%d") + timedelta(days=1)
 
         # Start query on StockTake model
         q = StockTake.query
