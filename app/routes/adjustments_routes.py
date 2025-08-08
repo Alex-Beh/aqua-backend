@@ -1,3 +1,4 @@
+import math
 from flask import Blueprint, request
 from sqlalchemy.orm import selectinload
 
@@ -138,6 +139,7 @@ def list_adjustments_paged():
         .select_from(query.subquery())
         .scalar()
     )
+    total_pages = max(math.ceil(total / size), 1)
 
     # ---------------- Response ----------------------------------------------------
     return api_response(
@@ -147,7 +149,7 @@ def list_adjustments_paged():
             "items": [adj.to_dict() for adj in items],
             "page":  page,
             "size":  size,
-            "total": total,
+            "total": total_pages,
         },
     )
 

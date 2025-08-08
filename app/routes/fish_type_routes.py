@@ -20,13 +20,6 @@ static_bs = Blueprint('static_files', __name__)
 def get_performed_by():
     return current_user.name if current_user.is_authenticated else "Anonymous"
 
-@static_bs.route('/uploads/fish_images/<type_code>')
-def serve_fish_image(type_code):
-    fish = FishType.query.filter(FishType.type_code == type_code).first()
-    if not fish.image_data:
-        abort(404)
-    return send_file(io.BytesIO(fish.image_data), mimetype=fish.image_mime_type)
-
 bp = Blueprint('fish_types', __name__, url_prefix='/api/fish-types')
 
 # API Routes
@@ -47,7 +40,7 @@ def get_fish_types_paged():
 def get_all_fish_types():
     status = request.args.get('status')
     fish_types = FishTypeService.get_all(status=status)
-    return api_response("Fish types retrieved", data=[ft.to_dict(include_image_data=True) for ft in fish_types])
+    return api_response("Fish types retrieved", data=[ft.to_dict() for ft in fish_types])
 
 # GET Dropdown /api/fish-types
 @bp.route('/dropdown', methods=['GET'])

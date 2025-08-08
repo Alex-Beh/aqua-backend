@@ -1,11 +1,12 @@
 from app import db
 from app.models import FishType
 from app.models.fish_type import FishSize
-from datetime import datetime
-from werkzeug.utils import secure_filename
 from sqlalchemy.orm import defer
+from contextlib import suppress
 
 from app.utils import api_response, paginate_response
+from app.services.supa_images import upload_image, delete_path
+
 
 class FishTypeService:
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
@@ -18,7 +19,7 @@ class FishTypeService:
         elif status == 'inactive':
             query = query.filter(FishType.is_active.is_(False))
         return query
-    
+
     @staticmethod
     def get_paginated(page, size, status=None, sort_field='type_code', sort_order='asc'):
         query = FishTypeService.base_query(status)
@@ -67,22 +68,20 @@ class FishTypeService:
         if 'size' in data and data['size']:
             size = FishSize(data['size'])
 
-        # Handle image and store as binary data
-        image_data = None
-        image_mime_type = None
-        if image_file and FishTypeService.allowed_file(image_file.filename):
-            image_data = image_file.read()
-            image_mime_type = image_file.mimetype
-
+        # Upload to Supabase Storage
+        image_path = None
         type_code_ = FishTypeService.generate_type_code()
+
+        if image_file and FishTypeService.allowed_file(image_file.filename):
+            image_path = upload_image(
+                image_file, image_file.mimetype, type_code_)
+
         new_fish_type = FishType(
             type_code=type_code_,
             common_name=data.get('commonName'),
             scientific_name=data.get('scientificName'),
             size=size,
-            image_url=f"/uploads/fish_images/{type_code_}", # to-be-removed
-            image_data=image_data,
-            image_mime_type=image_mime_type,
+            image_path=image_path,
             is_active=data.get('isActive', 'true').lower() == 'true',
             created_at=db.func.current_timestamp(),
             created_by=performed_by
@@ -93,17 +92,23 @@ class FishTypeService:
 
     @staticmethod
     def update(fish_type, data, image_file=None, performed_by=None):
-        validation_errors = FishTypeService.validate_fields(data, for_update=True)
+        validation_errors = FishTypeService.validate_fields(
+            data, for_update=True)
         if validation_errors:
             return api_response("Validation errors occurred", errors=validation_errors, status_code=400)
 
         if image_file and FishTypeService.allowed_file(image_file.filename):
-            filename = secure_filename(image_file.filename)
-            filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{filename}"
+            if fish_type.image_path:
+                with suppress(Exception):
+                    delete_path(fish_type.image_path)
+            fish_type.image_path = upload_image(
+                image_file, image_file.mimetype, fish_type.type_code)
 
         fish_type.common_name = data.get('commonName', fish_type.common_name)
-        fish_type.scientific_name = data.get('scientificName', fish_type.scientific_name)
-        fish_type.is_active = data.get('isActive', str(fish_type.is_active)).lower() == 'true'
+        fish_type.scientific_name = data.get(
+            'scientificName', fish_type.scientific_name)
+        fish_type.is_active = data.get('isActive', str(
+            fish_type.is_active)).lower() == 'true'
 
         if 'size' in data:
             fish_type.size = FishSize(data['size']) if data['size'] else None
@@ -130,7 +135,7 @@ class FishTypeService:
         db.session.commit()
 
         return api_response("Fish type deleted successfully")
-    
+
     @staticmethod
     def soft_delete(fish_type, performed_by=None):
         fish_type.deleted_at = db.func.current_timestamp()

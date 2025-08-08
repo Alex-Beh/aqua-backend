@@ -18,9 +18,6 @@ from app.utils import api_response, validate_json, paginate_response
 from app import db
 from app.models import Tank
 
-def _serialize(tank: Tank) -> dict:
-    """Return a dict representation using the model's to_dict method."""
-    return tank.to_dict()
 
 # ---------------------------------------------------------------------------
 # Tank‑stock endpoints ------------------------------------------------------
