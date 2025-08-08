@@ -102,7 +102,7 @@ class FishTypeService:
         if validation_errors:
             return api_response("Validation errors occurred", errors=validation_errors, status_code=400)
 
-        if image_file and FishTypeService.allowed_file(image_file.filename):
+        if image_file and image_file.filename:
             if fish_type.image_path:
                 with suppress(Exception):
                     delete_path(fish_type.image_path)

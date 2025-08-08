@@ -13,10 +13,13 @@ class TankStock(db.Model):
         db.PrimaryKeyConstraint("tank_id", "fish_type_id"),
     )
 
-    tank_id = db.Column(db.Integer, db.ForeignKey("tanks.tank_id"), nullable=False)
-    fish_type_id = db.Column(db.Integer, db.ForeignKey("fish_types.type_id"), nullable=False)
+    tank_id = db.Column(db.Integer, db.ForeignKey(
+        "tanks.tank_id"), nullable=False)
+    fish_type_id = db.Column(db.Integer, db.ForeignKey(
+        "fish_types.type_id"), nullable=False)
     quantity = db.Column(db.Integer, default=0)
-    last_updated = db.Column(db.DateTime, default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
+    last_updated = db.Column(db.DateTime, default=db.func.current_timestamp(
+    ), onupdate=db.func.current_timestamp())
 
     tank = db.relationship("Tank", back_populates="stocks")
     fish_type = db.relationship("FishType", back_populates="stocks")
@@ -29,10 +32,13 @@ class TankStock(db.Model):
             "quantity": self.quantity,
             "lastUpdated": self.last_updated.isoformat() if self.last_updated else None,
             "tank": self.tank.to_dict() if self.tank else None,  # Include nested tank details
-            "fishType": self.fish_type.to_dict() if self.fish_type else None,  # Include nested fish_type details
+            # Include nested fish_type details
+            "fishType": self.fish_type.to_dict() if self.fish_type else None,
         }
-        
+
     def to_dict_light(self):
+        ft = self.fish_type            # shortcut
+
         return {
             "tankId":       self.tank_id,
             "tankCode":     self.tank.tank_code,
@@ -42,6 +48,12 @@ class TankStock(db.Model):
             "commonName":   self.fish_type.common_name,
             "quantity":     self.quantity,
             "lastUpdated": self.last_updated.isoformat() if self.last_updated else None,
+            "fishType": None if ft is None else {
+                "typeId":       ft.type_id,
+                "typeCode":     ft.type_code,
+                "commonName":   ft.common_name,
+                "scientificName": ft.scientific_name,
+            },
         }
 
     def to_dict_QR_Purpose(self):
@@ -50,12 +62,15 @@ class TankStock(db.Model):
             "fishTypeId": self.fish_type_id,
             "quantity": self.quantity,
             "lastUpdated": self.last_updated.isoformat() if self.last_updated else None,
-            "fishType": self.fish_type.to_dict() if self.fish_type else None,  # Include nested fish_type details
+            # Include nested fish_type details
+            "fishType": self.fish_type.to_dict() if self.fish_type else None,
         }
 
 ############################
 # AUTOMATIC SYNC LOGIC
 ############################
+
+
 @event.listens_for(StockAdjustment, "after_insert")
 def _sync_tank_stock(mapper, connection, target):
     """Sync tank inventory after a stock adjustment."""
