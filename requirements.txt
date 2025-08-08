@@ -5,6 +5,10 @@ uvicorn[standard]
 psycopg2-binary  # If using PostgreSQL (e.g., with Supabase)
 supabase>=2.6
 
+# Image
+pillow
+pillow-heif
+
 Flask
 Flask-Cors
 Flask-SQLAlchemy
