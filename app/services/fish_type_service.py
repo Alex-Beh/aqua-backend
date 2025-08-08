@@ -5,6 +5,7 @@ from sqlalchemy.orm import defer
 from contextlib import suppress
 
 from app.utils import api_response, paginate_response
+from app.utils.convert_images import normalize_image_to_jpeg
 from app.services.supa_images import upload_image, delete_path
 
 
@@ -72,9 +73,13 @@ class FishTypeService:
         image_path = None
         type_code_ = FishTypeService.generate_type_code()
 
-        if image_file and FishTypeService.allowed_file(image_file.filename):
-            image_path = upload_image(
-                image_file, image_file.mimetype, type_code_)
+        if image_file and image_file.filename:
+            try:
+                stream, content_type, ext = normalize_image_to_jpeg(image_file)
+                image_path = upload_image(
+                    stream, content_type, type_code_, ext=ext)
+            except Exception as e:
+                return api_response("Unsupported or corrupt image format. Please try a different photo.", status_code=415)
 
         new_fish_type = FishType(
             type_code=type_code_,
@@ -101,8 +106,13 @@ class FishTypeService:
             if fish_type.image_path:
                 with suppress(Exception):
                     delete_path(fish_type.image_path)
-            fish_type.image_path = upload_image(
-                image_file, image_file.mimetype, fish_type.type_code)
+                try:
+                    stream, content_type, ext = normalize_image_to_jpeg(
+                        image_file)
+                    fish_type.image_path = upload_image(
+                        stream, content_type, fish_type.type_code, ext=ext)
+                except Exception as e:
+                    return api_response("Unsupported or corrupt image format. Please try a different photo.", status_code=415)
 
         fish_type.common_name = data.get('commonName', fish_type.common_name)
         fish_type.scientific_name = data.get(
