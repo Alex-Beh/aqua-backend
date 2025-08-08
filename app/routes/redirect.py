@@ -10,12 +10,12 @@ bp = Blueprint("redirect", __name__, url_prefix="/r")
 
 public_qr_tank = Blueprint("public_tank", __name__, url_prefix="/api/public")
 
-@public_qr_tank.route("/tank/<string:tank_name>", methods=["GET"])
-def get_public_tank_details(tank_name):
+@public_qr_tank.route("/tank/<string:tank_code>", methods=["GET"])
+def get_public_tank_details(tank_code):
     """Return tank and fish info for public QR view"""
-    tank = Tank.query.filter(func.lower(Tank.tank_name) == tank_name.lower()).first()
+    tank = Tank.query.filter(func.lower(Tank.tank_code) == tank_code.lower()).first()
     if not tank:
-        return api_response(f"Tank with code '{tank_name}' not found", status_code=404)
+        return api_response(f"Tank with code '{tank_code}' not found", status_code=404)
 
     stock_list = TankStockService.get_all_tank_stock(tank_id=tank.tank_id).all()
 
@@ -44,7 +44,7 @@ def get_public_tank_details(tank_name):
         ]
 
         fish_info_list.append({
-            "fishType": fish_type.to_dict_QR_Purpose(include_image_data=True),
+            "fishType": fish_type.to_dict_QR_Purpose(),
             "quantity": stock.quantity,
             "sameFishTanks": same_fish_tanks
         })

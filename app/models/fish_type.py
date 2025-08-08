@@ -72,8 +72,9 @@ class FishType(db.Model):
             'commonName': self.common_name,
             'scientificName': self.scientific_name,
             'size': self.size.value if self.size else None,
-            'imageUrl': self.image_url
+            'imagePath': self.image_path,
         }
+        data.update(self._image_urls())
 
         # Conditionally include base64 image data
         if include_image_data and self.image_data:
