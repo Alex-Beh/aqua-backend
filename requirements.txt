@@ -1,6 +1,10 @@
 fastapi
 uvicorn[standard]
+
+# Database / storage
 psycopg2-binary  # If using PostgreSQL (e.g., with Supabase)
+supabase-py
+
 Flask
 Flask-Cors
 Flask-SQLAlchemy
