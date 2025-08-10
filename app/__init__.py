@@ -73,3 +73,4 @@ def create_app():
     app.register_blueprint(public_qr_tank)
 
     return app
+

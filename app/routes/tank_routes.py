@@ -116,3 +116,9 @@ def delete_tank(tank_id):
 def create_tank_batch():
     data = request.get_json()
     return TankService.batch_create(data, performed_by=get_performed_by())
+
+@tanks_bp.route('/<int:tank_id>/health-check', methods=['POST'])
+def record_tank_health_check(tank_id):
+    data = request.get_json() or {}
+    status = data.get('status')
+    return TankService.record_health_check(tank_id, status=status, performed_by=get_performed_by())

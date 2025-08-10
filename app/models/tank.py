@@ -1,4 +1,3 @@
-import enum
 from datetime import datetime
 
 from app import db
@@ -25,6 +24,9 @@ class Tank(db.Model):
     deleted_by = db.Column(db.String(100))
     deleted_at = db.Column(db.DateTime)
     status = db.Column(db.String(20), default='Active')
+    last_health_check_at = db.Column(db.DateTime)
+    last_health_check_by = db.Column(db.String(100))
+    health_status = db.Column(db.String(20), default='healthy')
 
     # Relationships
     site = db.relationship("Site", back_populates="tanks")
@@ -46,9 +48,12 @@ class Tank(db.Model):
             'updatedAt': self.updated_at.isoformat() if self.updated_at else None,
             'deletedAt': self.deleted_at.isoformat() if self.deleted_at else None,
             'status': self.status,
+            'healthStatus': self.health_status,
             'createdBy': self.created_by,
             'updatedBy': self.updated_by,
-            'deletedBy': self.deleted_by
+            'deletedBy': self.deleted_by,
+            'lastHealthCheckAt': self.last_health_check_at.isoformat() if self.last_health_check_at else None,
+            'lastHealthCheckBy': self.last_health_check_by
         }
 
     def to_dict_QR_Purpose(self):
