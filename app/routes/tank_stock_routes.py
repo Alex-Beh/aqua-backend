@@ -1,5 +1,6 @@
 import math
-from flask import Blueprint, request
+import io
+from flask import Blueprint, request, send_file
 from app import db
 from app.models.site import Site
 from app.services.tank_stock_service import TankStockService
@@ -312,3 +313,53 @@ def tanks_with_stock():
     tank_stock_data = TankStockService.get_tanks_with_stock(site_id)
 
     return api_response("Tanks With Stock", data=tank_stock_data)
+
+
+@stock_bp.route("/overall-stock-status/export", methods=["GET"])
+def export_overall_stock_status():
+    site_id = request.args.get("siteId", type=int)
+
+    records = TankStockService.get_overall_stock_status(site_id)
+    from openpyxl import Workbook
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "OverallStockStatus"
+    ws.append([
+        "SiteName",
+        "TankCode",
+        "TankName",
+        "FishTypeCode",
+        "FishTypeName",
+        "Quantity",
+        "LastUpdated",
+    ])
+
+    for (
+        site_name,
+        tank_code,
+        tank_name,
+        type_code,
+        common_name,
+        quantity,
+        last_updated,
+    ) in records:
+        ws.append([
+            site_name,
+            tank_code,
+            tank_name,
+            type_code,
+            common_name,
+            quantity,
+            last_updated.isoformat() if last_updated else None,
+        ])
+
+    stream = io.BytesIO()
+    wb.save(stream)
+    stream.seek(0)
+
+    return send_file(
+        stream,
+        as_attachment=True,
+        download_name="overall_stock_status.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
