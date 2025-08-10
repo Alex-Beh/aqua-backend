@@ -381,9 +381,11 @@ def export_overall_stock_status():
         prev_site, prev_tank = site_name, tank_code
 
     # Expand columns to fit content
-    for column_cells in ws.columns:
+    from openpyxl.utils import get_column_letter
+
+    for idx, column_cells in enumerate(ws.columns, 1):
         max_length = 0
-        column_letter = column_cells[0].column_letter
+        column_letter = get_column_letter(idx)
         for cell in column_cells:
             if cell.value:
                 max_length = max(max_length, len(str(cell.value)))
