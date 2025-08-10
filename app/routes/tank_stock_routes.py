@@ -110,11 +110,11 @@ def get_total_quantity(fish_type_id):
 
 # Get total quantity for each tank, including a breakdown by fish type
 @stock_bp.route("/summary", methods=["GET"])
-def get_total_quantity_per_tank_route():
+def get_stock_summary_route():
     site_id = request.args.get("siteId", type=int)
 
     # Retrieve total quantity and fish breakdown via the service layer
-    total_quantities = TankStockService.get_total_quantity_per_tank(site_id)
+    total_quantities = TankStockService.get_stock_summary(site_id)
 
     result = []
     for tank_id, total_quantity in total_quantities:
@@ -124,7 +124,10 @@ def get_total_quantity_per_tank_route():
 
     result.sort(key=lambda x: x['tankName'])
 
-    return api_response("Total quantities per tank with fish type breakdown retrieved successfully", data=result)
+    return api_response(
+        "Total quantities per tank with fish type breakdown retrieved successfully",
+        data=result,
+    )
 
 @stock_bp.route("/dashboard/top-by-quantity", methods=["GET"])
 def get_top_tanks_by_quantity():

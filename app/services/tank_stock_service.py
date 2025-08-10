@@ -113,12 +113,16 @@ class TankStockService:
         return paginate_response(query, page, size, TankStock, sort_order)
 
     @staticmethod
-    def get_stock_summary(site_id=None):
+    def get_stock_summary(site_id: int | None = None):
         """Fetch total stock quantity per tank with optional site filter."""
-        query = db.session.query(
-            TankStock.tank_id,
-            db.func.sum(TankStock.quantity).label("total_quantity")
-        ).group_by(TankStock.tank_id).join(Tank)
+        query = (
+            db.session.query(
+                TankStock.tank_id,
+                db.func.sum(TankStock.quantity).label("total_quantity"),
+            )
+            .group_by(TankStock.tank_id)
+            .join(Tank)
+        )
 
         if site_id and site_id > 0:
             query = query.filter(Tank.site_id == site_id)
@@ -165,34 +169,6 @@ class TankStockService:
             .scalar()
 
         return total_quantity
-
-    @staticmethod
-    def get_total_quantity_per_tank(site_id=None):
-        """Fetches the total quantity of fish for each tank, with optional site filter."""
-        query = db.session.query(
-            TankStock.tank_id,
-            db.func.sum(TankStock.quantity).label("total_quantity")
-        ).group_by(TankStock.tank_id).join(Tank)
-
-        if site_id and site_id > 0:
-            query = query.filter(Tank.site_id == site_id)
-
-        return query.all()
-
-    @staticmethod
-    def get_top_tanks_by_quantity(limit, site_id=None):
-        """Fetches the top tanks by total quantity of fish."""
-        query = db.session.query(
-            TankStock.tank_id,
-            db.func.sum(TankStock.quantity).label("total_quantity")
-        ).group_by(TankStock.tank_id) \
-         .join(Tank) \
-         .order_by(db.desc("total_quantity"))
-
-        if site_id and site_id > 0:
-            query = query.filter(Tank.site_id == site_id)
-
-        return query.limit(limit).all()
 
     @staticmethod
     def get_site_distribution(site_id=None):
