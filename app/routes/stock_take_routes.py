@@ -562,3 +562,5 @@ def stock_take_counts():
             "cancelledCount": canceled_count,
             "totalCount": total_count
         })
+    except Exception as e:
+        return api_response("Failed to retrieve stock take counts", errors=str(e), status_code=500)
