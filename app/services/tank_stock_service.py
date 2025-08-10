@@ -1,5 +1,5 @@
 from app import db
-from app.models import TankStock, Tank, StockTake, StockTakeItem, FishType
+from app.models import TankStock, Tank, StockTake, StockTakeItem, FishType, Site
 from sqlalchemy.orm import joinedload
 from app.utils import paginate_response
 from sqlalchemy import or_, cast, String, desc
@@ -432,3 +432,26 @@ class TankStockService:
             "utilizationPercent": round(utilization, 1),
             "capacityUtilizationPercent": round(capacity_utilization, 1)
         }
+
+    @staticmethod
+    def get_overall_stock_status(site_id: int | None = None):
+        query = (
+            db.session.query(
+                Site.site_name,
+                Tank.tank_code,
+                Tank.tank_name,
+                FishType.type_code,
+                FishType.common_name,
+                TankStock.quantity,
+                TankStock.last_updated,
+            )
+            .join(Tank, Tank.tank_id == TankStock.tank_id)
+            .join(Site, Site.site_id == Tank.site_id)
+            .join(FishType, FishType.type_id == TankStock.fish_type_id)
+            .order_by(Site.site_name, Tank.tank_name, FishType.common_name)
+        )
+
+        if site_id and site_id > 0:
+            query = query.filter(Tank.site_id == site_id)
+
+        return query.all()

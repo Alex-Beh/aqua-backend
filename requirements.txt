@@ -16,3 +16,6 @@ Flask-Migrate
 Flask-Login
 python-dotenv
 gunicorn
+
+# Excel export
+openpyxl

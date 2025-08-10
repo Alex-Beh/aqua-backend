@@ -1,5 +1,7 @@
 import math
-from flask import Blueprint, request
+import io
+from datetime import datetime, timedelta, timezone
+from flask import Blueprint, request, send_file
 from app import db
 from app.models.site import Site
 from app.services.tank_stock_service import TankStockService
@@ -312,3 +314,90 @@ def tanks_with_stock():
     tank_stock_data = TankStockService.get_tanks_with_stock(site_id)
 
     return api_response("Tanks With Stock", data=tank_stock_data)
+
+
+@stock_bp.route("/overall-stock-status/export", methods=["GET"])
+def export_overall_stock_status():
+    site_id = request.args.get("siteId", type=int)
+    records = TankStockService.get_overall_stock_status(site_id)
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "OverallStockStatus"
+
+    # Header section with metadata
+    title_cell = ws["A1"]
+    title_cell.value = "Overall Stock Status"
+    title_cell.font = Font(bold=True, size=16)
+    ws.merge_cells("A1:G1")
+
+    generated_time = datetime.now(timezone(timedelta(hours=8))).strftime('%Y-%m-%d %H:%M:%S GMT+8')
+    ws["A2"] = f"Generated: {generated_time}"
+
+    site_label = "All Sites"
+    if site_id:
+        site_name = db.session.query(Site.site_name).filter_by(site_id=site_id).scalar()
+        site_label = site_name or f"Site {site_id}"
+    ws["A3"] = f"Site: {site_label}"
+
+    ws.append([])  # blank row before table headers
+    ws.append([
+        "SiteName",
+        "TankCode",
+        "TankName",
+        "FishTypeCode",
+        "FishTypeName",
+        "Quantity",
+        "LastUpdated",
+    ])
+
+    for cell in ws[ws.max_row]:
+        cell.font = Font(bold=True)
+
+    prev_site = None
+    prev_tank = None
+    for (
+        site_name,
+        tank_code,
+        tank_name,
+        type_code,
+        common_name,
+        quantity,
+        last_updated,
+    ) in records:
+        show_group = not (site_name == prev_site and tank_code == prev_tank)
+        ws.append([
+            site_name if show_group else "",
+            tank_code if show_group else "",
+            tank_name if show_group else "",
+            type_code,
+            common_name,
+            quantity,
+            last_updated.strftime("%Y-%m-%d %H:%M:%S") if last_updated else None,
+        ])
+        prev_site, prev_tank = site_name, tank_code
+
+    # Expand columns to fit content
+    from openpyxl.utils import get_column_letter
+
+    for idx, column_cells in enumerate(ws.columns, 1):
+        max_length = 0
+        column_letter = get_column_letter(idx)
+        for cell in column_cells:
+            if cell.value:
+                max_length = max(max_length, len(str(cell.value)))
+        ws.column_dimensions[column_letter].width = max_length + 2
+
+    stream = io.BytesIO()
+    wb.save(stream)
+    stream.seek(0)
+
+    return send_file(
+        stream,
+        as_attachment=True,
+        download_name="overall_stock_status.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
