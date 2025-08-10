@@ -1,6 +1,6 @@
 import math
 import io
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from flask import Blueprint, request, send_file
 from app import db
 from app.models.site import Site
@@ -331,9 +331,11 @@ def export_overall_stock_status():
     # Header section with metadata
     title_cell = ws["A1"]
     title_cell.value = "Overall Stock Status"
-    title_cell.font = Font(bold=True)
+    title_cell.font = Font(bold=True, size=16)
     ws.merge_cells("A1:G1")
-    ws["A2"] = f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}"
+
+    generated_time = datetime.now(timezone(timedelta(hours=8))).strftime('%Y-%m-%d %H:%M:%S GMT+8')
+    ws["A2"] = f"Generated: {generated_time}"
 
     site_label = "All Sites"
     if site_id:
@@ -377,6 +379,15 @@ def export_overall_stock_status():
             last_updated.strftime("%Y-%m-%d %H:%M:%S") if last_updated else None,
         ])
         prev_site, prev_tank = site_name, tank_code
+
+    # Expand columns to fit content
+    for column_cells in ws.columns:
+        max_length = 0
+        column_letter = column_cells[0].column_letter
+        for cell in column_cells:
+            if cell.value:
+                max_length = max(max_length, len(str(cell.value)))
+        ws.column_dimensions[column_letter].width = max_length + 2
 
     stream = io.BytesIO()
     wb.save(stream)
