@@ -57,9 +57,16 @@ def create_app():
     app.register_blueprint(fish_type_routes.static_bs)
     app.register_blueprint(tank_routes.tanks_bp)
 
-    from app.routes import adjustments_routes, tank_stock_routes
-    app.register_blueprint(adjustments_routes.adjust_bp)
+    from app.routes import (
+        stock_adjustments_routes,
+        stock_take_routes,
+        tank_stock_routes,
+        stock_analytics_routes,
+    )
+    app.register_blueprint(stock_adjustments_routes.adjust_bp)
+    app.register_blueprint(stock_take_routes.stock_take_bp)
     app.register_blueprint(tank_stock_routes.stock_bp)
+    app.register_blueprint(stock_analytics_routes.stock_analytics_bp)
 
     from app.routes import auth_routes, route_routes
     app.register_blueprint(route_routes.role_bp)
