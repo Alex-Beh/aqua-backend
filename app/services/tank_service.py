@@ -60,6 +60,7 @@ class TankService:
             capacity=data.get('capacity'),
             size=data.get('size', 'medium').lower(),
             status=data.get('status', 'Active').capitalize(),
+            health_status=data.get('healthStatus', 'healthy').lower(),
             created_at=db.func.current_timestamp(),
             created_by=performed_by
         )
@@ -82,6 +83,8 @@ class TankService:
         tank.tank_name = data.get('tankName', tank.tank_name)
         tank.capacity = data.get('capacity', tank.capacity)
         tank.status = data.get('status', tank.status).capitalize()
+        if 'healthStatus' in data:
+            tank.health_status = data['healthStatus'].lower()
 
         if 'size' in data:
             tank.size = data['size'].lower()
@@ -90,6 +93,23 @@ class TankService:
         tank.updated_by = performed_by
         db.session.commit()
         return api_response("Tank updated successfully", data=tank.to_dict())
+
+    @staticmethod
+    def record_health_check(tank_id, status, performed_by=None):
+        tank = Tank.query.get(tank_id)
+        if not tank or tank.deleted_at:
+            return api_response("Tank not found", status_code=404)
+
+        if not status or status.lower() not in ['healthy', 'unhealthy']:
+            return api_response("Invalid health status", status_code=400)
+
+        tank.health_status = status.lower()
+        tank.last_health_check_at = db.func.current_timestamp()
+        tank.last_health_check_by = performed_by
+        tank.updated_at = db.func.current_timestamp()
+        tank.updated_by = performed_by
+        db.session.commit()
+        return api_response("Health check recorded", data=tank.to_dict())
 
     @staticmethod
     def delete(tank_id, performed_by=None):
@@ -185,6 +205,10 @@ class TankService:
                 errors['status'] = "Status is required"
             elif status.lower() not in ['active', 'maintenance', 'retired']:
                 errors['status'] = "Invalid status value"
+
+            health_status = data.get('healthStatus')
+            if health_status and health_status.lower() not in ['healthy', 'unhealthy']:
+                errors['healthStatus'] = "Invalid health status value"
 
         # Capacity validation (ensure it is a positive integer or zero)
         if 'capacity' in data:

@@ -331,7 +331,7 @@ def export_overall_stock_status():
     # Header section with metadata
     title_cell = ws["A1"]
     title_cell.value = "Overall Stock Status"
-    title_cell.font = Font(bold=True, size=16)
+    title_cell.font = Font(bold=True, size=25)
     ws.merge_cells("A1:G1")
 
     generated_time = datetime.now(timezone(timedelta(hours=8))).strftime('%Y-%m-%d %H:%M:%S GMT+8')
@@ -355,7 +355,7 @@ def export_overall_stock_status():
     ])
 
     for cell in ws[ws.max_row]:
-        cell.font = Font(bold=True)
+        cell.font = Font(bold=True, size=12)  # header font size
 
     prev_site = None
     prev_tank = None
@@ -380,16 +380,17 @@ def export_overall_stock_status():
         ])
         prev_site, prev_tank = site_name, tank_code
 
+    # --- Apply default font size for all non-title cells ---
+    for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
+        for cell in row:
+            if not cell.font.bold:  # don't override title/header styling
+                cell.font = Font(size=12)
+
     # Expand columns to fit content
     from openpyxl.utils import get_column_letter
-
     for idx, column_cells in enumerate(ws.columns, 1):
-        max_length = 0
-        column_letter = get_column_letter(idx)
-        for cell in column_cells:
-            if cell.value:
-                max_length = max(max_length, len(str(cell.value)))
-        ws.column_dimensions[column_letter].width = max_length + 2
+        max_length = max((len(str(c.value)) if c.value else 0) for c in column_cells)
+        ws.column_dimensions[get_column_letter(idx)].width = max_length + 2
 
     stream = io.BytesIO()
     wb.save(stream)

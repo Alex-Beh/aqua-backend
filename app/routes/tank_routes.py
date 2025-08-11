@@ -116,3 +116,34 @@ def delete_tank(tank_id):
 def create_tank_batch():
     data = request.get_json()
     return TankService.batch_create(data, performed_by=get_performed_by())
+
+@tanks_bp.route('/health-check', methods=['POST'])
+def record_bulk_tank_health_checks():
+    data = request.get_json() or {}
+    statuses = data.get('statuses', [])
+    date = data.get('date')  # optional, if you want to store/report by date
+
+    success = 0
+    errors = []
+    for entry in statuses:
+        print(f"Tank: {entry['tankId']}: {entry['status']} ")
+        try:
+            TankService.record_health_check(
+                entry['tankId'],
+                status=entry['status'],
+                performed_by=get_performed_by()
+            )
+            success += 1
+        except Exception as e:
+            errors.append({'tankId': entry.get('tankId'), 'error': str(e)})
+
+    return api_response(
+        "Health checks recorded",
+        data={'success': success, 'failed': len(errors), 'errors': errors}
+    )
+
+@tanks_bp.route('/<int:tank_id>/health-check', methods=['POST'])
+def record_tank_health_check(tank_id):
+    data = request.get_json() or {}
+    status = data.get('status')
+    return TankService.record_health_check(tank_id, status=status, performed_by=get_performed_by())
