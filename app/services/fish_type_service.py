@@ -1,3 +1,5 @@
+import uuid
+
 from app import db
 from app.models import FishType
 from app.models.fish_type import FishSize
@@ -96,37 +98,72 @@ class FishTypeService:
         return api_response("Fish type created successfully", data=new_fish_type.to_dict(), status_code=201)
 
     @staticmethod
-    def update(fish_type, data, image_file=None, performed_by=None):
-        validation_errors = FishTypeService.validate_fields(
-            data, for_update=True)
-        if validation_errors:
-            return api_response("Validation errors occurred", errors=validation_errors, status_code=400)
+    def _validate_and_normalize_image(image_file):
+        """
+        Returns (stream, content_type, ext) when a valid file is supplied.
+        If no file was sent, returns (None, None, None).
 
-        if image_file and image_file.filename:
+        Raises ValueError when the extension is not allowed.
+        """
+        if not image_file or not getattr(image_file, "filename", ""):
+            # Nothing uploaded in this request
+            return None, None, None
+
+        if not FishTypeService.allowed_file(image_file.filename):
+            raise ValueError(
+                f"Unsupported extension. Allowed: {', '.join(FishTypeService.ALLOWED_EXTENSIONS)}"
+            )
+
+        # convert → RGB JPEG, keep original ext so we can store it
+        return normalize_image_to_jpeg(image_file)
+
+    @staticmethod
+    def update(fish_type, data, image_file=None, performed_by=None):
+        # ---- 2-a) field-level validation ------------------------------
+        validation_errors = FishTypeService.validate_fields(data, for_update=True)
+        if validation_errors:
+            return api_response(
+                "Validation errors occurred", errors=validation_errors, status_code=400
+            )
+
+        # ---- 2-b) image handling --------------------------------------
+        try:
+            stream, content_type, ext = FishTypeService._validate_and_normalize_image(image_file)
+        except ValueError as exc:
+            # bad extension or other validation issue
+            return api_response(str(exc), status_code=415)
+
+        if stream:  # A *new* image really was provided
+            # Remove the old object if it exists (ignore errors silently)
             if fish_type.image_path:
                 with suppress(Exception):
                     delete_path(fish_type.image_path)
-                try:
-                    stream, content_type, ext = normalize_image_to_jpeg(
-                        image_file)
-                    fish_type.image_path = upload_image(
-                        stream, content_type, fish_type.type_code, ext=ext)
-                except Exception as e:
-                    return api_response("Unsupported or corrupt image format. Please try a different photo.", status_code=415)
 
+            # Give each upload its own key to avoid collisions
+            key = f"{fish_type.type_code}_{uuid.uuid4().hex[:8]}.{ext}"
+            fish_type.image_path = upload_image(stream, content_type, key)
+
+        # ---- 2-c) scalar / enum fields --------------------------------
         fish_type.common_name = data.get('commonName', fish_type.common_name)
-        fish_type.scientific_name = data.get(
-            'scientificName', fish_type.scientific_name)
-        fish_type.is_active = data.get('isActive', str(
-            fish_type.is_active)).lower() == 'true'
+        fish_type.scientific_name = data.get('scientificName', fish_type.scientific_name)
 
         if 'size' in data:
             fish_type.size = FishSize(data['size']) if data['size'] else None
 
+        if 'isActive' in data:
+            fish_type.is_active = str(data['isActive']).lower() == 'true'
+
+        # ---- 2-d) audit metadata & commit -----------------------------
         fish_type.updated_at = db.func.current_timestamp()
         fish_type.updated_by = performed_by
+
+        db.session.add(fish_type)   # harmless if already in session
         db.session.commit()
-        return api_response("Fish type updated successfully", data=fish_type.to_dict())
+
+        return api_response(
+            "Fish type updated successfully",
+            data=fish_type.to_dict()
+        )
 
     @staticmethod
     def delete(type_id, performed_by=None):
