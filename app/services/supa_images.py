@@ -1,5 +1,4 @@
 from uuid import uuid4
-from mimetypes import guess_extension
 from app.supabase_client import supabase, STORAGE_BUCKET
 
 
@@ -14,7 +13,7 @@ def upload_image(file_stream, content_type, folder_name, ext=".jpg"):
     res = supabase.storage.from_(STORAGE_BUCKET).upload(
         path,
         data,
-        {"content-type": ext, "cache-control": "31536000"},
+        {"content-type": content_type, "cache-control": "31536000"},
     )
     if getattr(res, "error", None):
         raise RuntimeError(f"Upload failed: {res.error}")
