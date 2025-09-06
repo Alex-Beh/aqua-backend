@@ -90,27 +90,65 @@ class TankStockService:
 
     @staticmethod
     def get_paged_tank_stock(page, size, sort_field, sort_order, tank_id=None, fish_type_id=None, site_id=None, search_text=""):
-        """Handles pagination and sorting for tank stock records."""
-        
-        # Get the base query with filters applied
-        query = TankStockService.get_all_tank_stock(tank_id, fish_type_id, site_id, search_text)
-        
-        # Sorting logic
+        """Handles pagination and sorting for tank stock records with proper joins for ordering."""
+        # Build a query on TankStock but JOIN the related tables so we can sort/filter by their columns
+        query = (
+            db.session.query(TankStock)
+            .join(Tank, Tank.tank_id == TankStock.tank_id)
+            .join(FishType, FishType.type_id == TankStock.fish_type_id)
+            .options(
+                selectinload(TankStock.tank).load_only(
+                    Tank.tank_id, Tank.tank_code, Tank.tank_name, Tank.site_id
+                ),
+                selectinload(TankStock.fish_type).load_only(
+                    FishType.type_id, FishType.common_name, FishType.scientific_name, FishType.type_code
+                ).defer(FishType.image_data).defer(FishType.image_mime_type),
+            )
+        )
+
+        # Filters
+        if tank_id and tank_id > 0:
+            query = query.filter(TankStock.tank_id == tank_id)
+        if fish_type_id and fish_type_id > 0:
+            query = query.filter(TankStock.fish_type_id == fish_type_id)
+        if site_id and site_id > 0:
+            query = query.filter(Tank.site_id == site_id)
+        if search_text:
+            like = f"%{search_text.lower()}%"
+            query = query.filter(
+                db.or_(
+                    db.func.lower(Tank.tank_name).like(like),
+                    db.func.lower(FishType.common_name).like(like),
+                    db.func.lower(FishType.type_code).like(like),
+                    cast(TankStock.quantity, String).like(like),
+                )
+            )
+
+        # Sorting
         valid_sort_fields = ["tank_name", "common_name", "quantity", "type_code"]
         if sort_field not in valid_sort_fields:
             sort_field = "tank_name"
-        
         sort_mapping = {
             "tank_name": Tank.tank_name,
             "common_name": FishType.common_name,
             "quantity": TankStock.quantity,
-            "type_code": FishType.type_code
+            "type_code": FishType.type_code,
         }
-
         sort_column = sort_mapping.get(sort_field, Tank.tank_name)
-        query = query.order_by(sort_column.desc() if sort_order == "desc" else sort_column)
+        if sort_order == "desc":
+            sort_column = sort_column.desc()
+        query = query.order_by(sort_column)
 
-        return paginate_response(query, page, size, TankStock, sort_order)
+        # Paginate with a lightweight serializer to avoid image fields
+        total = query.count()
+        items = query.offset((page - 1) * size).limit(size).all()
+        return {
+            'total': total,
+            'totalPages': (total + size - 1) // size if size > 0 else 0,
+            'page': page,
+            'size': size,
+            'items': [item.to_dict_light() for item in items],
+        }
 
     @staticmethod
     def get_stock_summary(site_id: int | None = None):
