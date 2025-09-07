@@ -126,6 +126,19 @@ def list_adjustments_paged():
         ),
     )
 
+    # ---------------- Apply sorting ---------------------------------------------
+    # Map allowed sort fields to ORM columns; default to transaction_date
+    sort_map = {
+        "transaction_date": StockAdjustment.transaction_date,
+        "recorded_at": getattr(StockAdjustment, "recorded_at", StockAdjustment.transaction_date),
+        "transaction_type": StockAdjustment.transaction_type,
+    }
+    sort_col = sort_map.get(sort_field, StockAdjustment.transaction_date)
+    if (sort_order or "").lower() == "asc":
+        query = query.order_by(sort_col.asc(), StockAdjustment.stock_adjustment_id.asc())
+    else:
+        query = query.order_by(sort_col.desc(), StockAdjustment.stock_adjustment_id.desc())
+
     # ---------------- Offset/limit pagination ------------------------------------
     items = (
         query.limit(size)
@@ -145,11 +158,13 @@ def list_adjustments_paged():
     return api_response(
         "Stock adjustments retrieved successfully",
         data={
-            # make sure this helper exists
-            "items": [adj.to_dict() for adj in items],
-            "page":  page,
-            "size":  size,
-            "total": total_pages,
+            "items": [adj.to_dict_light() for adj in items],
+            "page": page,
+            "size": size,
+            "total": total,                # total rows across all pages
+            "totalPages": total_pages,     # explicit page count
+            "hasNext": page < total_pages,
+            "hasPrev": page > 1,
         },
     )
 
